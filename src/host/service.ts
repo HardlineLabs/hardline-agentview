@@ -10,6 +10,12 @@ import { Vault } from "./vault";
 import { Codex, findCodex } from "./codex";
 import { applyConversationEvent } from "../shared/conversation";
 import { SessionObserver, type ObservedAction } from "./observer";
+import {
+  listAll,
+  threadSources,
+  desktopAssignments,
+  assignProjects,
+} from "./catalog";
 import type {
   Activity,
   Agent,
@@ -23,6 +29,9 @@ import type {
   Snapshot,
   Thread,
   Turn,
+  Project,
+  TokenUsage,
+  AccountLimits,
 } from "../shared/types";
 
 export function encodeConnection(c: Connection) {
@@ -86,6 +95,12 @@ export class HostService extends EventEmitter {
   private sockets = new Set<WebSocket>();
   private threads: Thread[] = [];
   private models: Model[] = [];
+  private projects: Project[] = [];
+  private sections: { id: string; name: string }[] = [];
+  private usage = new Map<string, TokenUsage>();
+  private limits: AccountLimits = { buckets: [], checkedAt: 0 };
+  private limitsPoll?: NodeJS.Timeout;
+  private readingLimits = false;
   private agents = new Map<string, Agent>();
   private activity: Activity[] = [];
   private approvals = new Map<string | number, Approval>();
@@ -111,7 +126,7 @@ export class HostService extends EventEmitter {
     super();
     this.vault = new Vault(settings.vaultPath);
     this.vault.on("graph", (graph) => {
-      this.broadcast({ type: "graph", graph, projects: this.vault.projects });
+      this.broadcast({ type: "graph", graph, projects: this.allProjects() });
       this.emit("status");
     });
     this.vault.on("change", (e) =>
@@ -226,9 +241,15 @@ export class HostService extends EventEmitter {
           let result: any;
           // Keep command outcomes through reconnect; duplicate sends never start a second turn.
           if (
-            ["thread.send", "thread.create", "approval.respond"].includes(
-              request.method,
-            )
+            [
+              "thread.send",
+              "thread.steer",
+              "thread.create",
+              "thread.archive",
+              "thread.unarchive",
+              "thread.delete",
+              "approval.respond",
+            ].includes(request.method)
           ) {
             if (!this.commands.has(key))
               this.commands.set(
@@ -280,6 +301,7 @@ export class HostService extends EventEmitter {
     );
     void this.connectAgent();
     this.poll = setInterval(() => void this.refreshThreads(), 6000);
+    this.limitsPoll = setInterval(() => void this.refreshLimits(), 60_000);
     this.emit("status");
   }
   async connectAgent() {
@@ -287,6 +309,9 @@ export class HostService extends EventEmitter {
       await this.codex.start(await findCodex(this.settings.codexPath));
       if (this.codex.codexHome) {
         this.observer = new SessionObserver(this.codex.codexHome);
+        this.observer.on("usage", ({ threadId, usage }) =>
+          this.setUsage(threadId, usage),
+        );
         this.observer.on("activity", (event: ObservedAction) => {
           const target = this.vault.matchTarget(event.targetText);
           this.setAgent(event.threadId, {
@@ -311,6 +336,7 @@ export class HostService extends EventEmitter {
       const result = await this.codex.rpc("model/list");
       this.models = result.data || [];
       await this.refreshThreads();
+      await this.refreshLimits();
       this.broadcast({ type: "snapshot", snapshot: this.snapshot() });
     } catch (e: any) {
       this.codex.error = e.message;
@@ -323,29 +349,110 @@ export class HostService extends EventEmitter {
     if (!this.codex.ready || this.refreshing || this.stopping) return;
     this.refreshing = true;
     try {
-      const result = await this.codex.rpc("thread/list", {
-        limit: 100,
-        sortKey: "updated_at",
-        sourceKinds: [],
-      });
+      const rpc = this.codex.rpc.bind(this.codex);
+      const [active, archived, projects, legacy, sections] = await Promise.all([
+        listAll<Thread>(rpc, "thread/list", {
+          sortKey: "updated_at",
+          sourceKinds: threadSources,
+          modelProviders: [],
+        }),
+        listAll<Thread>(rpc, "thread/list", {
+          sortKey: "updated_at",
+          sourceKinds: threadSources,
+          modelProviders: [],
+          archived: true,
+        }),
+        listAll<any>(rpc, "project/list").catch(() => []),
+        desktopAssignments(this.codex.codexHome),
+        listAll<{ id: string; name: string }>(rpc, "threadSection/list").catch(
+          () => [],
+        ),
+      ]);
+      this.sections = sections;
+      this.projects = projects.map((p) => ({
+        id: p.id,
+        name: p.name,
+        path: p.roots?.[0]?.path || "",
+        runtime: true,
+      }));
       const merged = new Map<string, Thread>(
-        result.data.map((t: Thread) => [
+        [
+          ...active.map((t) => ({ ...t, archived: false })),
+          ...archived.map((t) => ({ ...t, archived: true })),
+        ].map((t: Thread) => [
           t.id,
-          { ...t, owned: this.owned.has(t.id) },
+          { ...t, owned: this.owned.has(t.id), usage: this.usage.get(t.id) },
         ]),
       );
       for (const [id, live] of this.liveThreads)
         if (!merged.has(id)) merged.set(id, { ...live, owned: true });
-      this.threads = [...merged.values()].sort(
-        (a, b) => b.updatedAt - a.updatedAt,
-      );
+      this.threads = assignProjects(
+        [...merged.values()],
+        this.allProjects(),
+        legacy,
+      ).sort((a, b) => b.updatedAt - a.updatedAt);
       await this.observer?.track(this.threads);
-      this.broadcast({ type: "threads", threads: this.threads });
+      this.broadcast({
+        type: "threads",
+        threads: this.threads,
+        projects: this.allProjects(),
+        sections: this.sections,
+      });
     } catch (e: any) {
       this.emit("diagnostic", e.message);
     } finally {
       this.refreshing = false;
     }
+  }
+  private allProjects(): Project[] {
+    return [
+      ...this.projects,
+      ...this.vault.projects.filter(
+        (p) =>
+          !this.projects.some(
+            (other) =>
+              other.path &&
+              path.resolve(other.path).toLowerCase() ===
+                path.resolve(p.path).toLowerCase(),
+          ),
+      ),
+    ];
+  }
+  async refreshLimits() {
+    if (!this.codex.ready || this.readingLimits || this.stopping) return;
+    this.readingLimits = true;
+    try {
+      const result = await this.codex.rpc("account/rateLimits/read", null);
+      this.limits = {
+        buckets: result.rateLimitsByLimitId
+          ? Object.values(result.rateLimitsByLimitId)
+          : result.rateLimits
+            ? [result.rateLimits]
+            : [],
+        checkedAt: Date.now(),
+      };
+    } catch {
+      this.limits = {
+        ...this.limits,
+        error:
+          "Codex usage limits are unavailable. Last received values may be out of date.",
+      };
+    } finally {
+      this.readingLimits = false;
+      this.broadcast({ type: "limits", limits: this.limits });
+    }
+  }
+  private setUsage(threadId: string, usage: TokenUsage) {
+    if (
+      !usage ||
+      !Number.isFinite(usage.last?.totalTokens) ||
+      !Number.isFinite(usage.total?.totalTokens)
+    )
+      return;
+    this.usage.set(threadId, usage);
+    const thread = this.threads.find((t) => t.id === threadId);
+    if (thread) thread.usage = usage;
+    this.broadcast({ type: "usage", threadId, usage });
   }
   private record(event: Omit<Activity, "id" | "time">) {
     const activity = {
@@ -380,6 +487,41 @@ export class HostService extends EventEmitter {
     const { method, params: p } = message;
     if (!p) return;
     const tid = p.threadId || p.thread?.id;
+    if (method === "thread/tokenUsage/updated")
+      this.setUsage(tid, p.tokenUsage);
+    if (method === "account/rateLimits/updated") {
+      const bucket = p.rateLimits;
+      if (bucket)
+        this.limits = {
+          buckets: [
+            ...this.limits.buckets.filter((b) => b.limitId !== bucket.limitId),
+            bucket,
+          ],
+          checkedAt: Date.now(),
+        };
+      this.broadcast({ type: "limits", limits: this.limits });
+    }
+    if (
+      ["thread/archived", "thread/deleted", "thread/unarchived"].includes(
+        method,
+      )
+    ) {
+      this.liveThreads.delete(tid);
+      this.liveTurns.delete(tid);
+      this.loaded.delete(tid);
+      this.agents.delete(tid);
+      if (method === "thread/deleted") {
+        this.owned.delete(tid);
+        this.usage.delete(tid);
+        void this.saveOwned();
+      }
+      this.broadcast({
+        type: "threadChanged",
+        threadId: tid,
+        action: method.split("/")[1],
+      });
+      void this.refreshThreads();
+    }
     if (tid && (method.startsWith("item/") || method.startsWith("turn/")))
       this.liveTurns.set(
         tid,
@@ -470,7 +612,9 @@ export class HostService extends EventEmitter {
         limit: 100,
         cursor: p.cursor || null,
         sortKey: "updated_at",
-        sourceKinds: [],
+        sourceKinds: threadSources,
+        modelProviders: [],
+        archived: Boolean(p.archived),
       });
     if (method === "thread.read") {
       let thread = this.liveThreads.get(p.id);
@@ -497,7 +641,12 @@ export class HostService extends EventEmitter {
         for (const turn of this.liveTurns.get(p.id) || [])
           turns.set(turn.id, turn);
       return {
-        thread: { ...thread!, owned: this.owned.has(p.id) },
+        thread: {
+          ...thread!,
+          ...this.threads.find((t) => t.id === p.id),
+          owned: this.owned.has(p.id),
+          usage: this.usage.get(p.id),
+        },
         turns: [...turns.values()].map((turn) =>
           this.owned.has(p.id) &&
           !this.loaded.has(p.id) &&
@@ -517,10 +666,13 @@ export class HostService extends EventEmitter {
     }
     if (method === "thread.create") {
       const project =
-        this.vault.projects.find((project) => project.id === p.projectId) ||
+        this.allProjects().find((project) => project.id === p.projectId) ||
         this.vault.projects[0];
+      if (!project?.path)
+        throw new Error("Choose a workspace with a local folder.");
       const { thread } = await this.codex.rpc("thread/start", {
         cwd: project.path,
+        ...(project.runtime ? { projectId: project.id } : {}),
         ...(p.model ? { model: p.model } : {}),
         historyMode: "paginated",
       });
@@ -531,7 +683,39 @@ export class HostService extends EventEmitter {
       await this.refreshThreads();
       return { ...thread, owned: true };
     }
-    if (method === "thread.send") {
+    if (
+      ["thread.archive", "thread.unarchive", "thread.delete"].includes(method)
+    ) {
+      const id = String(p.id);
+      const thread = this.threads.find((t) => t.id === id);
+      if (!thread)
+        throw new Error("Conversation no longer exists. Refresh the list.");
+      if (
+        this.activeTurns.has(id) ||
+        this.agents.get(id)?.active ||
+        thread.status.type === "active"
+      )
+        throw new Error(
+          "Wait for this agent to finish or stop it before clearing the conversation.",
+        );
+      if (method === "thread.delete" && p.confirm !== id)
+        throw new Error(
+          "Confirm permanent deletion of this conversation and its subagents.",
+        );
+      const result = await this.codex.rpc(method.replace(".", "/"), {
+        threadId: id,
+      });
+      this.liveThreads.delete(id);
+      this.liveTurns.delete(id);
+      this.loaded.delete(id);
+      if (method === "thread.delete") {
+        this.owned.delete(id);
+        await this.saveOwned();
+      }
+      await this.refreshThreads();
+      return result;
+    }
+    if (method === "thread.send" || method === "thread.steer") {
       if (
         typeof p.text !== "string" ||
         !p.text.trim() ||
@@ -539,6 +723,30 @@ export class HostService extends EventEmitter {
       )
         throw new Error("Enter a message of up to 100,000 characters.");
       let id = String(p.id);
+      if (this.threads.find((t) => t.id === id)?.archived)
+        throw new Error("Restore this conversation before sending a message.");
+      let text = p.text;
+      if (p.noteId) {
+        const note = this.vault.read(p.noteId);
+        text += `\n\nAttached vault note: ${p.noteId}\n<note-content>\n${note.body}\n</note-content>`;
+      }
+      if (method === "thread.steer") {
+        const turnId = this.activeTurns.get(id);
+        if (!this.owned.has(id) || !turnId)
+          throw new Error(
+            "The turn has finished or belongs to Desktop. Your message has not been sent; send again to continue.",
+          );
+        if (p.expectedTurnId !== turnId)
+          throw new Error(
+            "The active turn changed. Review the conversation before sending again.",
+          );
+        await this.codex.rpc("turn/steer", {
+          threadId: id,
+          expectedTurnId: turnId,
+          input: [{ type: "text", text }],
+        });
+        return { threadId: id, steered: true };
+      }
       if (!this.owned.has(id)) {
         // An independent app-server must not take over a turn running in Desktop.
         const { thread } = await this.codex.rpc("thread/fork", {
@@ -561,11 +769,6 @@ export class HostService extends EventEmitter {
         throw new Error(
           "This agent is already working. Stop the current turn before sending another message.",
         );
-      let text = p.text;
-      if (p.noteId) {
-        const note = this.vault.read(p.noteId);
-        text += `\n\nAttached vault note: ${p.noteId}\n<note-content>\n${note.body}\n</note-content>`;
-      }
       const result = await this.codex.rpc("turn/start", {
         threadId: id,
         input: [{ type: "text", text }],
@@ -627,7 +830,9 @@ export class HostService extends EventEmitter {
   snapshot(): Snapshot {
     return {
       graph: this.vault.graph,
-      projects: this.vault.projects,
+      projects: this.allProjects(),
+      limits: this.limits,
+      sections: this.sections,
       threads: this.threads,
       models: this.models,
       agents: [...this.agents.values()],
@@ -692,6 +897,7 @@ export class HostService extends EventEmitter {
   async stop() {
     this.stopping = true;
     clearInterval(this.poll);
+    clearInterval(this.limitsPoll);
     clearInterval(this.heartbeat);
     for (const socket of this.sockets) socket.close(1001, "Host stopped");
     this.sockets.clear();

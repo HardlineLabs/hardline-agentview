@@ -16,6 +16,7 @@ import {
 } from "d3-force";
 import type { Graph as GraphData, Note, Agent } from "../shared/types";
 import { colors } from "./api";
+import { moveToward } from "./motion";
 
 type Node = Note &
   SimulationNodeDatum & { radius: number; homeX: number; homeY: number };
@@ -143,7 +144,7 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
         .force("y", forceY<Node>((n) => n.homeY).strength(0.065))
         .velocityDecay(0.26)
         .alpha(0.7)
-        .alphaTarget(0.012);
+        .alphaTarget(0);
       if (!old.size) {
         sim.current.stop().tick(100).restart();
         const timer = setTimeout(fit, 150);
@@ -154,17 +155,22 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
       const c = canvas.current!;
       const ctx = c.getContext("2d")!;
       let frame = 0;
+      let lastTime = 0;
       let dragging: Node | null = null;
       let pan = false;
       let moved = false;
       let down = { x: 0, y: 0 };
       let hovered: string | undefined;
       const orbPositions = new Map<string, { x: number; y: number }>();
+      const connections = new Map<
+        string,
+        { target: string; progress: number }
+      >();
       let orbHits: { id: string; x: number; y: number }[] = [];
       const resize = new ResizeObserver(([entry]) => {
-        const dpr = Math.min(window.devicePixelRatio || 1, 2);
-        c.width = entry.contentRect.width * dpr;
-        c.height = entry.contentRect.height * dpr;
+        const dpr = window.devicePixelRatio || 1;
+        c.width = Math.round(entry.contentRect.width * dpr);
+        c.height = Math.round(entry.contentRect.height * dpr);
         view.current.width = entry.contentRect.width;
         view.current.height = entry.contentRect.height;
       });
@@ -243,7 +249,7 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
           if (!moved) latest.current.onSelect(dragging);
           dragging.fx = null;
           dragging.fy = null;
-          sim.current?.alphaTarget(0.012);
+          sim.current?.alphaTarget(0);
         }
         dragging = null;
         pan = false;
@@ -269,8 +275,23 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
       const draw = (time: number) => {
         const v = view.current;
         const p = latest.current;
-        const dpr = Math.min(window.devicePixelRatio || 1, 2);
-        v.scale += (v.targetScale - v.scale) * 0.12;
+        const dpr = window.devicePixelRatio || 1;
+        // A monitor move can change density without changing the CSS canvas size.
+        if (
+          c.width !== Math.round(v.width * dpr) ||
+          c.height !== Math.round(v.height * dpr)
+        ) {
+          c.width = Math.round(v.width * dpr);
+          c.height = Math.round(v.height * dpr);
+        }
+        const seconds = Math.min(
+          0.05,
+          lastTime ? (time - lastTime) / 1000 : 1 / 60,
+        );
+        lastTime = time;
+        v.scale += (v.targetScale - v.scale) * (1 - Math.exp(-seconds * 8));
+        if (Math.abs(v.targetScale - v.scale) < 0.00001)
+          v.scale = v.targetScale;
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.clearRect(0, 0, v.width, v.height);
         const t = p.motion ? time / 1000 : 0;
@@ -327,10 +348,6 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
             y = n.y || 0;
           const pulse = 1 + Math.sin(t * 0.9 + i * 2) * 0.08;
           ctx.globalAlpha = match ? 1 : 0.13;
-          if (p.motion && !dragging && sim.current) {
-            n.vx = (n.vx || 0) + Math.sin(t * 0.6 + i * 3) * 0.012;
-            n.vy = (n.vy || 0) + Math.cos(t * 0.5 + i * 2) * 0.012;
-          }
           const glow = ctx.createRadialGradient(
             x,
             y,
@@ -418,21 +435,71 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
         const agents = p.agents.filter(
           (a) => a.active || Date.now() - a.updated < 15000,
         );
+        const stations = [
+          {
+            id: "terminal",
+            title: "Terminal",
+            symbol: ">_",
+            x: 86,
+            y: v.height - 58,
+            color: "#e6bc78",
+          },
+          {
+            id: "workspace",
+            title: "Agent workspace",
+            symbol: "✦",
+            x: v.width - 100,
+            y: v.height - 58,
+            color: "#b3ffe1",
+          },
+        ].map((station) => ({ ...station, ...world(station) }));
+        const stationFor = (a: Agent) =>
+          stations[a.action === "running" ? 0 : 1];
+        for (const station of stations) {
+          const busy = agents.filter(
+            (a) => a.active && !a.target && stationFor(a).id === station.id,
+          );
+          if (busy.length)
+            orbHits.push({
+              id: busy[0].threadId,
+              x: station.x * v.scale + v.width / 2 + v.x,
+              y: station.y * v.scale + v.height / 2 + v.y,
+            });
+          ctx.save();
+          ctx.translate(station.x, station.y);
+          ctx.scale(1 / v.scale, 1 / v.scale);
+          ctx.fillStyle = "#101e25";
+          ctx.strokeStyle = station.color + (busy.length ? "cc" : "45");
+          ctx.shadowColor = station.color;
+          ctx.shadowBlur = busy.length ? 18 + Math.sin(t * 2) * 4 : 0;
+          ctx.lineWidth = 1.3;
+          ctx.beginPath();
+          ctx.roundRect(-25, -22, 50, 44, 13);
+          ctx.fill();
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+          ctx.fillStyle = station.color;
+          ctx.font = '600 17px "DM Sans", sans-serif';
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(station.symbol, 0, -1);
+          ctx.font = '500 11px "DM Sans", sans-serif';
+          ctx.fillText(station.title, 0, 35);
+          if (busy.length) {
+            ctx.font = '400 10px "DM Sans", sans-serif';
+            ctx.fillText(`${busy.length} active · ${busy[0].action}`, 0, 50);
+          }
+          ctx.restore();
+        }
         agents.forEach((a, i) => {
-          const target = a.target && map.get(a.target);
-          const theta = t * 0.33 + i * 2.4;
-          const dest = target
-            ? {
-                x: target.x! + Math.cos(theta) * 25,
-                y: target.y! + Math.sin(theta) * 25,
-              }
-            : {
-                x: Math.cos(theta) * (90 + i * 32),
-                y: Math.sin(theta * 0.8) * (65 + i * 24),
-              };
+          const target = (a.target && map.get(a.target)) || stationFor(a);
+          const theta = t * 0.18 + i * 2.4;
+          const dest = {
+            x: target.x! + (Math.cos(theta) * 38) / v.scale,
+            y: target.y! - 36 / v.scale + (Math.sin(theta) * 16) / v.scale,
+          };
           const pos = orbPositions.get(a.id) || { x: 0, y: 0 };
-          pos.x += (dest.x - pos.x) * 0.035;
-          pos.y += (dest.y - pos.y) * 0.035;
+          moveToward(pos, dest, seconds, v.scale);
           orbPositions.set(a.id, pos);
           const color = a.parentId ? "#c4acff" : "#b3ffe1";
           const radius = a.parentId ? 5 : 7;
@@ -458,16 +525,53 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
           ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
           ctx.fill();
           ctx.shadowBlur = 0;
-          if (target) {
-            ctx.strokeStyle = color + "55";
-            ctx.setLineDash([2, 4]);
+          if (a.active) {
+            const targetId = a.target || stationFor(a).id;
+            let connection = connections.get(a.id);
+            if (!connection || connection.target !== targetId) {
+              connection = { target: targetId, progress: 0 };
+              connections.set(a.id, connection);
+            }
+            connection.progress = Math.min(
+              1,
+              connection.progress + seconds / 0.45,
+            );
+            const reach = p.motion ? 1 - (1 - connection.progress) ** 3 : 1;
+            const end = {
+              x: pos.x + (target.x! - pos.x) * reach,
+              y: pos.y + (target.y! - pos.y) * reach,
+            };
+            ctx.strokeStyle = color + "60";
+            ctx.lineWidth = 4 / v.scale;
+            ctx.shadowColor = color;
+            ctx.shadowBlur = 12;
             ctx.beginPath();
             ctx.moveTo(pos.x, pos.y);
-            ctx.lineTo(target.x!, target.y!);
+            ctx.lineTo(end.x, end.y);
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            ctx.strokeStyle = color + "e0";
+            ctx.lineWidth = 1.5 / v.scale;
+            ctx.setLineDash([7 / v.scale, 9 / v.scale]);
+            ctx.lineDashOffset = (-t * 24) / v.scale;
             ctx.stroke();
             ctx.setLineDash([]);
+            ctx.lineDashOffset = 0;
+            for (let packet = 0; packet < 3; packet++) {
+              const progress = (t * 0.45 + packet / 3) % 1;
+              ctx.fillStyle = "#eafff5";
+              ctx.beginPath();
+              ctx.arc(
+                pos.x + (end.x - pos.x) * progress,
+                pos.y + (end.y - pos.y) * progress,
+                2 / v.scale,
+                0,
+                Math.PI * 2,
+              );
+              ctx.fill();
+            }
           }
-          ctx.font = '500 10px Inter, "Segoe UI", sans-serif';
+          ctx.font = '500 10px "DM Sans", "Segoe UI", sans-serif';
           ctx.fillStyle = color;
           ctx.textAlign = "center";
           ctx.fillText(`${a.name} · ${a.action}`, pos.x, pos.y + 20);
@@ -477,6 +581,11 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
             y: pos.y * v.scale + v.height / 2 + v.y,
           });
         });
+        for (const id of orbPositions.keys())
+          if (!agents.some((a) => a.id === id)) {
+            orbPositions.delete(id);
+            connections.delete(id);
+          }
         ctx.restore();
         frame = requestAnimationFrame(draw);
       };
