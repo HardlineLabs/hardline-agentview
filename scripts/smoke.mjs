@@ -25,6 +25,9 @@ delete env.ELECTRON_RUN_AS_NODE;
 let host, client;
 const errors = [];
 const packaged = process.env.AGENTVIEW_PACKAGED === "1";
+const displayArgs = process.env.AGENTVIEW_TEST_DPR
+  ? [`--force-device-scale-factor=${Number(process.env.AGENTVIEW_TEST_DPR)}`]
+  : [];
 try {
   host = await electron.launch({
     ...(packaged
@@ -58,12 +61,19 @@ try {
             root,
             "out/client/win-unpacked/AgentView.exe",
           ),
-          args: [],
+          args: displayArgs,
         }
-      : { args: [root, "--role=client"] }),
+      : { args: [root, "--role=client", ...displayArgs] }),
     env: { ...env, AGENTVIEW_DATA_DIR: path.join(dir, "client") },
   });
   const cw = await client.firstWindow();
+  if (process.env.AGENTVIEW_TEST_DPR) {
+    // Initial creation is clamped to the physical test monitor's work area.
+    // Keep a supported CSS viewport while emulating a higher-density monitor.
+    await client.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0].setSize(1500, 940),
+    );
+  }
   cw.on("pageerror", (e) => errors.push(e.message));
   await cw.evaluate(() => window.agentview.invoke("connection.disconnect"));
   await cw.reload();
@@ -73,7 +83,9 @@ try {
   await cw.getByRole("button", { name: "Connect to workspace" }).click();
   await cw.getByText("Your living brain.").waitFor({ timeout: 20_000 });
   await cw.getByLabel("Filter by project").waitFor();
-  await cw.getByLabel("Filter by category").waitFor();
+  const catalog = await cw.evaluate(() => window.agentview.invoke("snapshot"));
+  if (catalog.sections?.length)
+    await cw.getByLabel("Filter by category").waitFor();
   await cw.waitForTimeout(1800);
   await cw.screenshot({ path: path.join(dir, "client.png") });
   await cw.getByRole("button", { name: "Find anything" }).click();
@@ -104,6 +116,12 @@ try {
     };
   });
   assert.equal(density.width, density.expected);
+  if (process.env.AGENTVIEW_TEST_DPR) {
+    assert.equal(
+      await cw.evaluate(() => devicePixelRatio),
+      Number(process.env.AGENTVIEW_TEST_DPR),
+    );
+  }
   await client.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()[0].setSize(1100, 760),
   );

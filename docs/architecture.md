@@ -118,6 +118,7 @@ agent turn; that uses the signed-in account and creates a conversation.
 The live check sends steering during command execution, verifies the response,
 then archives, restores and deletes only that newly created test conversation.
 Set `AGENTVIEW_PACKAGED=1` to run the same checks against the packaged app payloads.
+Set `AGENTVIEW_TEST_DPR=3` to verify native canvas resolution above 2x density.
 After packaging, `node scripts/portable-smoke.mjs` launches the actual portable
 executables and verifies their independent roles, TLS pairing and live vault.
 It uses isolated settings and closes only the process trees it creates.
