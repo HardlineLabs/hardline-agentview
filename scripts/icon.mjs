@@ -1,0 +1,15 @@
+import sharp from "sharp";
+import { mkdir, writeFile } from "node:fs/promises";
+const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256"><defs><linearGradient id="b" x2="1" y2="1"><stop stop-color="#2c4844"/><stop offset="1" stop-color="#0c1b24"/></linearGradient><radialGradient id="g"><stop stop-color="#c3f4d6" stop-opacity=".18"/><stop offset="1" stop-color="#9ed8c2" stop-opacity="0"/></radialGradient></defs><rect x="3" y="3" width="250" height="250" rx="55" fill="url(#b)" stroke="#8dbcae" stroke-opacity=".35" stroke-width="2"/><circle cx="128" cy="124" r="112" fill="url(#g)"/><g transform="translate(38 30) scale(4.5)" stroke="#bdecd2" fill="none"><path d="M20 5 33 13v14L20 35 7 27V13L20 5Z" stroke-width="1.2"/><path d="m7 13 13 8 13-8M20 21v14M20 5v16L7 27m13-6 13 6" stroke-width=".8" opacity=".55"/><g fill="#d9f8e7" stroke="none"><circle cx="20" cy="21" r="3.2"/><circle cx="20" cy="5" r="1.5"/><circle cx="7" cy="27" r="1.5"/><circle cx="33" cy="13" r="1.5"/></g></g></svg>`;
+await mkdir("assets", { recursive: true });
+await writeFile("assets/icon.svg", svg);
+const png = await sharp(Buffer.from(svg)).png().toBuffer();
+await writeFile("assets/icon.png", png);
+const header = Buffer.alloc(22);
+header.writeUInt16LE(1, 2);
+header.writeUInt16LE(1, 4);
+header.writeUInt16LE(1, 10);
+header.writeUInt16LE(32, 12);
+header.writeUInt32LE(png.length, 14);
+header.writeUInt32LE(22, 18);
+await writeFile("assets/icon.ico", Buffer.concat([header, png]));
