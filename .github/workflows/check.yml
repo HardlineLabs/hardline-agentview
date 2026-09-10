@@ -14,3 +14,19 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: microsoft
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - run: npm ci
+      - run: npm run android:sync
+      - run: chmod +x android/gradlew && android/gradlew -p android assembleDebug lintRelease --console=plain

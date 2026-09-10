@@ -43,7 +43,10 @@ test("TLS pairing, identity rejection, live snapshots, and reconnect", async () 
     host.codex.ready = true;
   };
   host.codex.rpc = async () => ({ data: [] });
-  const client = new ClientConnection();
+  let saved: import("../src/shared/types").Connection;
+  const client = new ClientConnection(async (config) => {
+    saved = config;
+  });
   const invalid = new ClientConnection();
   let replacement: HostService | undefined;
   try {
@@ -85,7 +88,7 @@ test("TLS pairing, identity rejection, live snapshots, and reconnect", async () 
     assert.equal(host.snapshot().approvals.length, 0);
     client.disconnect();
     const reconnect = eventWhere(client, (e) => e.type === "snapshot");
-    client.connect(config);
+    client.connect(saved!);
     await reconnect;
     assert.equal(client.connected, true);
     const unauthorized = new WebSocket(config.address, {

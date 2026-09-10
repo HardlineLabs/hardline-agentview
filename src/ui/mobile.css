@@ -1,0 +1,661 @@
+.mobile-menu,
+.mobile-live,
+.drawer-title,
+.drawer-scrim {
+  display: none;
+}
+.touch-hint {
+  display: none;
+}
+.remote-field {
+  margin-top: 18px;
+}
+.remote-field input {
+  width: 100%;
+}
+.remote-field small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.6;
+}
+.pairing-invitation {
+  margin: 20px auto 8px;
+  text-align: center;
+}
+.pairing-invitation img {
+  width: 250px;
+  max-width: 100%;
+  border-radius: 12px;
+  padding: 8px;
+  background: white;
+}
+.pairing-invitation p {
+  margin-top: 10px;
+  font-size: 11px;
+}
+.paired-device {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+}
+.paired-device > svg {
+  color: var(--mint);
+}
+.paired-device > div {
+  flex: 1;
+  min-width: 0;
+}
+.paired-device small {
+  display: block;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.paired-device button {
+  font-size: 11px;
+  padding: 9px 12px;
+}
+.scan-pairing {
+  width: 100%;
+  min-height: 48px;
+  margin-bottom: 18px;
+}
+.graph-canvas {
+  touch-action: none;
+}
+
+@media (max-width: 760px) {
+  :root {
+    font-size: 14px;
+  }
+  body {
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .client-app {
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .client-app .window-bar {
+    display: none;
+  }
+  button,
+  summary {
+    touch-action: manipulation;
+  }
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+  .icon-button {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+  }
+  .app-header {
+    height: 62px;
+    padding: 0 12px 0 7px;
+    gap: 9px;
+    background: #0c1318;
+  }
+  .mobile-menu {
+    display: inline-flex;
+    flex-shrink: 0;
+    color: #a6c0bc;
+  }
+  .brand {
+    width: auto;
+    gap: 8px;
+  }
+  .brand strong {
+    font-size: 17px;
+  }
+  .brand strong span,
+  .brand small,
+  .header-workspace {
+    display: none;
+  }
+  .brand-mark svg {
+    width: 23px;
+    height: 23px;
+  }
+  .header-actions {
+    gap: 8px;
+    margin-left: auto;
+  }
+  .search-trigger {
+    width: 38px;
+    height: 40px;
+    padding: 0;
+    background: transparent;
+    border: 0;
+  }
+  .search-trigger span,
+  .search-trigger kbd {
+    display: none;
+  }
+  .connection-pill {
+    padding: 5px 7px;
+    font-size: 10px;
+    gap: 5px;
+  }
+  .avatar {
+    display: none;
+  }
+  .mobile-live {
+    display: flex;
+    min-height: 37px;
+    padding: 0 18px;
+    gap: 8px;
+    border-bottom: 1px solid var(--line);
+    background: #12201f;
+    flex-shrink: 0;
+    text-align: left;
+    color: #90b3a8;
+  }
+  .mobile-live > span:nth-child(2) {
+    flex: 1;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 11px;
+  }
+  .mobile-live small {
+    font-size: 10px;
+    white-space: nowrap;
+  }
+  .workspace {
+    display: flex;
+    position: relative;
+    min-height: 0;
+    width: 100%;
+    overflow: hidden;
+  }
+  .chat-panel {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    flex: 1;
+    background:
+      radial-gradient(ellipse at 80% 0, #1c30282e, transparent 60%), #0e161c;
+  }
+  .phone-chat .brain-panel {
+    display: none;
+  }
+  .phone-brain .chat-panel {
+    display: none;
+  }
+  .brain-panel {
+    width: 100%;
+    min-width: 0;
+    flex: 1;
+  }
+  .chat-heading {
+    height: 64px;
+    min-height: 64px;
+    padding: 0 17px;
+    gap: 10px;
+  }
+  .chat-heading h3 {
+    max-width: 240px;
+    font-size: 14px;
+  }
+  .chat-heading .eyebrow {
+    font-size: 8px;
+    letter-spacing: 1.4px;
+  }
+  .chat-icon {
+    width: 30px;
+    height: 30px;
+  }
+  .chat-hide {
+    display: none;
+  }
+  .chat-scroll {
+    padding: 20px 18px 12px;
+  }
+  .chat-welcome {
+    padding-top: clamp(12px, 5vh, 54px);
+  }
+  .chat-welcome h2 {
+    font-size: 27px;
+    line-height: 1.25;
+    letter-spacing: -0.8px;
+  }
+  .chat-welcome > p {
+    font-size: 13px;
+    line-height: 1.7;
+    max-width: 290px;
+    margin: 12px auto 22px;
+  }
+  .welcome-spark {
+    margin-bottom: 22px;
+  }
+  .workspace-select {
+    width: 100%;
+    max-width: 320px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .workspace-select select {
+    max-width: 100%;
+    min-height: 42px;
+  }
+  .starter-prompts {
+    display: grid;
+    gap: 9px;
+    margin-top: 20px;
+  }
+  .starter-prompts button {
+    min-height: 46px;
+    border-radius: 12px;
+    justify-content: flex-start;
+    font-size: 12px;
+    padding: 12px 15px;
+  }
+  .composer-area {
+    padding: 9px 12px 8px;
+    background: linear-gradient(transparent, #0c141a 20%);
+  }
+  .composer {
+    border-radius: 17px;
+    background: #162027;
+    border-color: #9bbdac26;
+    box-shadow: 0 6px 25px #0002;
+  }
+  .composer textarea {
+    padding: 14px 14px 5px;
+    min-height: 66px;
+    max-height: 150px;
+    line-height: 1.55;
+  }
+  .composer-bottom {
+    padding: 5px 9px 9px 11px;
+    gap: 6px;
+  }
+  .model-controls {
+    min-width: 0;
+    max-width: calc(100% - 52px);
+    gap: 4px;
+  }
+  .model-controls select {
+    min-height: 36px;
+    font-size: 11px;
+    max-width: 140px;
+    padding-right: 16px;
+  }
+  .model-controls select + select {
+    max-width: 85px;
+  }
+  .send-button {
+    min-width: 42px;
+    min-height: 42px;
+    border-radius: 12px;
+  }
+  .composer-foot {
+    font-size: 9px;
+    padding-top: 8px;
+    gap: 6px;
+  }
+  .composer-foot > span {
+    min-width: 0;
+  }
+  .composer-foot .keyboard-hint {
+    display: none;
+  }
+  .composer-foot .touch-hint {
+    display: inline;
+  }
+  .branch-hint {
+    font-size: 10px;
+    line-height: 1.5;
+    padding: 8px 4px;
+  }
+  .chat-management {
+    padding: 7px 16px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .chat-management button {
+    min-height: 34px;
+  }
+  .user-message {
+    font-size: 14px;
+    padding: 13px 15px;
+    border-radius: 16px 16px 4px 16px;
+    line-height: 1.65;
+  }
+  .agent-message {
+    padding-top: 8px;
+  }
+  .markdown {
+    font-size: 14px;
+    line-height: 1.75;
+    overflow-wrap: anywhere;
+  }
+  .markdown pre {
+    max-width: 100%;
+    font-size: 11px;
+  }
+  .tool-item {
+    margin: 8px 0;
+  }
+  .tool-item summary {
+    min-height: 40px;
+  }
+  .approval-card {
+    padding: 17px;
+    border-radius: 14px;
+  }
+  .approval-actions button,
+  .answer-options button {
+    min-height: 44px;
+  }
+  .sidebar {
+    position: fixed;
+    z-index: 61;
+    top: env(safe-area-inset-top, 0px);
+    bottom: env(safe-area-inset-bottom, 0px);
+    left: 0;
+    width: min(88vw, 360px);
+    transform: translateX(-105%);
+    transition: transform 220ms ease;
+    background: #10191f;
+    padding: 20px 15px 14px;
+    border-radius: 0 22px 22px 0;
+    box-shadow: 20px 0 70px #0007;
+  }
+  .drawer-open .sidebar {
+    transform: translateX(0);
+  }
+  .sidebar > .sidebar-heading:not(.conversations-heading),
+  .sidebar > .project-list {
+    display: none;
+  }
+  .sidebar > .nav-item {
+    display: none;
+  }
+  .sidebar .thread-list {
+    flex: 1;
+    min-height: 100px;
+  }
+  .sidebar .thread > div > span {
+    max-width: 235px;
+  }
+  .sidebar .conversations-heading {
+    margin-top: 20px;
+  }
+  .drawer-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 22px;
+  }
+  .drawer-title h2 {
+    font-size: 23px;
+    margin-top: 7px;
+    letter-spacing: -0.6px;
+  }
+  .drawer-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    background: #02080c9c;
+    backdrop-filter: blur(5px);
+  }
+  .thread {
+    padding: 13px 10px;
+    min-height: 62px;
+    border-radius: 11px;
+  }
+  .thread > div > span {
+    font-size: 13px;
+  }
+  .thread small {
+    font-size: 10px;
+    margin-top: 5px;
+  }
+  .new-chat {
+    min-height: 45px;
+    border-radius: 11px;
+  }
+  .nav-item {
+    min-height: 43px;
+  }
+  .sidebar-bottom button {
+    min-height: 42px;
+  }
+  .brain-top {
+    top: 22px;
+    left: 20px;
+    right: 15px;
+    padding: 0;
+  }
+  .brain-top h1 {
+    font-size: 27px;
+    letter-spacing: -1px;
+  }
+  .brain-top p {
+    font-size: 11px;
+    margin-top: 7px;
+  }
+  .brain-top-actions {
+    gap: 2px;
+  }
+  .brain-top-actions > button:last-child {
+    display: none;
+  }
+  .graph-meta {
+    top: 122px;
+    left: 20px;
+    padding: 0;
+    font-size: 10px;
+    gap: 12px;
+  }
+  .graph-surface {
+    inset: 140px 0 130px;
+  }
+  .graph-surface canvas {
+    touch-action: none;
+  }
+  .graph-domains {
+    left: 16px;
+    right: 16px;
+    bottom: 92px;
+    gap: 6px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    justify-content: flex-start;
+    padding-bottom: 4px;
+  }
+  .graph-domains button {
+    flex-shrink: 0;
+    min-height: 34px;
+  }
+  .graph-bottom {
+    left: 16px;
+    right: 16px;
+    bottom: 22px;
+    gap: 8px;
+  }
+  .graph-moment {
+    min-width: 0;
+  }
+  .graph-moment strong {
+    font-size: 10px;
+  }
+  .graph-moment span {
+    max-width: 145px;
+    font-size: 9px;
+  }
+  .graph-controls button {
+    width: 34px;
+    height: 36px;
+  }
+  .graph-controls > button:last-child,
+  .graph-controls > span {
+    display: none;
+  }
+  .note-inspector,
+  .activity-drawer {
+    left: 10px;
+    right: 10px;
+    top: auto;
+    bottom: 10px;
+    width: auto;
+    max-height: 75%;
+    border-radius: 20px;
+    box-shadow: 0 -20px 60px #0008;
+  }
+  .note-body {
+    font-size: 13px;
+  }
+  .attach-button {
+    min-height: 46px;
+  }
+  .activity-row {
+    padding: 15px;
+  }
+  .app-footer {
+    display: none;
+  }
+  .modal-backdrop {
+    z-index: 80;
+    padding: 12px;
+    align-items: flex-end;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+  .settings-modal {
+    width: 100%;
+    max-height: 90dvh;
+    overflow: auto;
+    padding: 24px;
+    border-radius: 24px;
+  }
+  .setting-row {
+    gap: 12px;
+  }
+  .setting-row p {
+    font-size: 12px;
+  }
+  .command-palette {
+    width: 100%;
+    max-height: 80dvh;
+    margin: 0;
+    border-radius: 20px;
+  }
+  .palette-backdrop {
+    padding-top: max(15px, env(safe-area-inset-top));
+    align-items: flex-start;
+  }
+  .palette-results button {
+    min-height: 45px;
+  }
+  .toast {
+    left: 12px;
+    right: 12px;
+    bottom: max(16px, env(safe-area-inset-bottom));
+    max-width: none;
+    width: auto;
+    transform: none;
+    font-size: 12px;
+  }
+  .connect-page {
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    padding: 28px 26px 30px;
+    gap: 0;
+    justify-content: center;
+  }
+  .connect-art {
+    flex-shrink: 0;
+    width: 190px;
+    height: 190px;
+    transform: scale(0.58);
+    transform-origin: center;
+    margin: -30px auto -25px;
+  }
+  .connect-copy {
+    width: 100%;
+    max-width: 400px;
+    margin: 0 auto;
+    padding: 0;
+  }
+  .connect-copy h1 {
+    font-size: 34px;
+    line-height: 1.22;
+    margin: 14px 0;
+    letter-spacing: -1.1px;
+  }
+  .connect-copy > p {
+    font-size: 13px;
+    line-height: 1.7;
+  }
+  .connect-copy form {
+    margin-top: 27px;
+  }
+  .connect-copy form > button {
+    min-height: 48px;
+    border-radius: 12px;
+  }
+  .connect-copy textarea {
+    font-size: 13px;
+    min-height: 75px;
+    border-radius: 12px;
+  }
+  .connect-copy details {
+    font-size: 12px;
+    margin: 12px 0;
+  }
+  .connect-copy details summary {
+    min-height: 34px;
+  }
+  .connect-foot {
+    font-size: 10px;
+    margin-top: 22px;
+  }
+}
+@media (max-width: 760px) and (max-height: 510px) {
+  .app-header {
+    height: 46px;
+  }
+  .chat-heading {
+    height: 48px;
+    min-height: 48px;
+  }
+  .mobile-live {
+    min-height: 29px;
+  }
+  .composer textarea {
+    min-height: 40px;
+    max-height: 80px;
+  }
+  .composer-foot {
+    display: none;
+  }
+  .chat-welcome {
+    padding-top: 8px;
+  }
+  .welcome-spark,
+  .starter-prompts {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sidebar {
+    transition: none;
+  }
+}
+
+.connection-section .input-row button {
+  flex-shrink: 0;
+  width: auto;
+  padding: 12px 15px;
+  white-space: nowrap;
+}

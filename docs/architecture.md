@@ -1,6 +1,6 @@
 # Architecture
 
-AgentView has two Windows entry points built from one TypeScript project.
+AgentView has two Windows entry points and an Android client in one TypeScript project. Android bundles the shared React interface in a Capacitor shell with native networking and secure storage.
 The host is an Electron tray application. The client is an Electron application
 with a React interface and a Canvas/d3-force knowledge graph. Fonts and visual
 assets are bundled; the client does not need an internet connection to render.
@@ -22,22 +22,19 @@ this storage boundary.
 
 ## Connection
 
-The host listens on TCP 43120 by default, using TLS. A connection key contains
-the LAN address, a random access token and the host certificate fingerprint.
-The client checks the pinned certificate before sending the token. Pairing needs
-no accounts, domain, certificate authority or router forwarding. Treat the key
-as access to the workspace; do not publish it. This is designed for a private LAN.
-The optional **Allow LAN connections** action asks Windows for administrator
-approval and creates or updates the single `Hardline-AgentView-LAN` inbound rule:
-TCP on the configured port, limited to `LocalSubnet`, on any Windows profile.
-It never changes the network's Public/Private classification.
+The default LAN listener is TLS on TCP 43120. Clients prefer the paired LAN host
+and fall back to its configured remote WSS endpoint. Both use authenticated,
+end-to-end encrypted sessions with per-device credentials. See the authoritative
+[remote access guide](remote-access.md) for protocol, pairing, isolation, migration,
+Cloudflare setup and operational boundaries.
 
-The desktop main process owns the socket; the renderer receives a narrow IPC API.
-Typed events carry graph snapshots, activity, conversation deltas and approvals.
-The host sends heartbeats. Clients retry with backoff after a lost connection and
-receive a fresh snapshot. The host keeps running when the viewer disconnects.
-Requests have unique identifiers; repeated mutation identifiers are deduplicated
-within a host process. The client never automatically resends an uncertain action.
+The desktop main process owns networking; Android uses its native socket plugin.
+Both use the shared WorkspaceConnection state machine and typed interface bridge.
+Events carry graph snapshots, activity, conversation deltas and approvals. The
+host sends heartbeats. Clients retry with backoff and receive a fresh snapshot.
+The host keeps running when a viewer disconnects. Mutations are deduplicated by
+device and request identifier within a host process; reusing an identifier with a
+different action is rejected. Clients do not resend uncertain actions.
 
 Host settings and TLS identity are stored in the current Windows user's application
 data directory. Start-at-sign-in is optional. Closing the host window hides it;
@@ -107,7 +104,7 @@ outputs are never interpreted as activity. This adapter is version-sensitive.
 
 `npm run check` runs TypeScript, unit/integration tests and the production build.
 Tests exercise live vault reconciliation, link semantics, path restriction,
-TLS/token rejection, connection recovery and streamed conversation ordering.
+TLS/peer rejection, connection recovery and streamed conversation ordering.
 They also cover full catalog pagination, project migration, historical token
 recovery, steering preconditions, archive/restore/delete and refresh-independent
 travel speed.
@@ -125,3 +122,8 @@ It uses isolated settings and closes only the process trees it creates.
 
 `npm run package` builds two portable Windows executables. Packaging and local
 checks publish nothing. The GitHub workflow validates branches independently.
+
+Android CI builds the debug APK and runs release lint. The physical-device smoke
+checks real native networking, chat/context data, graph pixels and navigation,
+draft retention and secure-storage recovery. An optional configured remote endpoint
+exercises the real public path with LAN made unreachable. See [Android validation](android.md).
