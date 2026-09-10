@@ -139,7 +139,10 @@ public class WorkspaceSocketPlugin extends Plugin {
     }
     @PluginMethod public void scan(PluginCall call) {
         ScanOptions options = new ScanOptions().setDesiredBarcodeFormats(ScanOptions.QR_CODE)
-            .setPrompt("Scan the pairing invitation on AgentView Host").setBeepEnabled(false).setOrientationLocked(false);
+            .setCaptureActivity(PairingCaptureActivity.class)
+            .setPrompt("Keep the entire QR code inside the frame. Move back if it does not focus.")
+            .setBeepEnabled(false).setOrientationLocked(true)
+            .addExtra("SCAN_TYPE", 2); // Decode both normal and inverted QR images.
         startActivityForResult(call, options.createScanIntent(getContext()), "scanned");
     }
     @ActivityCallback private void scanned(PluginCall call, ActivityResult result) {

@@ -23,6 +23,15 @@ use the same end-to-end encrypted protocol. A remote endpoint change requires an
 updated pairing invitation. A valid remote connection stays in use until the next
 connection cycle; reconnects try LAN first. A client never automatically repeats an
 action whose outcome became uncertain during a disconnect.
+Initial connection attempts stop after 30 seconds with guidance if neither route
+works. A reachable host has a separate secure-handshake deadline; returning from
+the scanner does not restart pairing already in progress.
+
+If a remote client cannot pair, check that Host shows the configured remote
+endpoint and that its tunnel is connected. Restart Host after external setup
+changes. The host's listening port must match the tunnel's origin port. Create a
+fresh invitation after restoring remote access; an earlier LAN-only invitation
+does not gain the remote address automatically.
 
 Protocol 3 uses Web Crypto P-256 ephemeral ECDH, HKDF-SHA-256, HMAC-SHA-256 peer
 proofs and directional AES-256-GCM message keys. The 256-bit out-of-band credential

@@ -29,7 +29,7 @@ export class SecurePeer {
   ) {
     this.timer = setTimeout(
       () => this.close(4001, "Pairing timed out"),
-      10_000,
+      20_000,
     );
     socket.on("message", (bytes) => {
       if (

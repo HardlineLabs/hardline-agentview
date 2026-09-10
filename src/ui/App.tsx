@@ -134,8 +134,8 @@ function HostApp() {
       setInvitation({
         ...result,
         qr: await QRCode.toDataURL(result.code, {
-          width: 280,
-          margin: 2,
+          scale: 6,
+          margin: 4,
           errorCorrectionLevel: "M",
         }),
       });
@@ -470,6 +470,7 @@ function Connect({
   const [code, setCode] = useState("");
   const [address, setAddress] = useState("");
   const [scanError, setScanError] = useState("");
+  const connecting = state === "connecting" || state === "reconnecting";
   return (
     <div className="connect-page">
       <div className="connect-art">
@@ -506,7 +507,9 @@ function Connect({
             <button
               type="button"
               className="scan-pairing secondary"
+              disabled={connecting}
               onClick={async () => {
+                setScanError("");
                 try {
                   const result = await invoke("connection.scan");
                   setCode(result.value);
@@ -536,18 +539,13 @@ function Connect({
               onChange={(e) => setAddress(e.target.value)}
             />
           </details>
-          <button
-            className="primary"
-            disabled={!code.trim() || state === "connecting"}
-          >
-            {state === "connecting" ? (
+          <button className="primary" disabled={!code.trim() || connecting}>
+            {connecting ? (
               <LoaderCircle className="spin" size={16} />
             ) : (
               <ArrowRight size={16} />
             )}{" "}
-            {state === "connecting"
-              ? "Finding your workspace…"
-              : "Connect to workspace"}
+            {connecting ? "Finding your workspace…" : "Connect to workspace"}
           </button>
         </form>
         {(message || scanError) && (
