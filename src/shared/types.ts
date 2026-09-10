@@ -140,6 +140,9 @@ export type HostSettings = {
   codexPath: string;
   port: number;
   autoStart: boolean;
+  remoteAddress?: string;
+  cloudflaredPath?: string;
+  tunnelConfig?: string;
 };
 export type HostStatus = {
   running: boolean;
@@ -147,16 +150,24 @@ export type HostStatus = {
   settings: HostSettings;
   addresses: string[];
   pairingCode: string;
+  remoteStatus?: string;
+  devices?: PairedDevice[];
   clients: number;
   notes: number;
   agentReady: boolean;
   agentError?: string;
 };
 export type Connection = {
+  version: 3;
+  hostId: string;
+  credentialId: string;
+  secret: string;
+  kind: "invite" | "device";
   address: string;
-  token: string;
   fingerprint: string;
+  remoteAddress?: string;
 };
+export type PairedDevice = { id: string; name: string; createdAt: number };
 export type AppEvent = { type: string; [key: string]: any };
 export type DesktopBridge = {
   role: "host" | "client";

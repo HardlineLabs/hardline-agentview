@@ -1,5 +1,8 @@
 import type { AppEvent } from "../shared/types";
-export const bridge = window.agentview;
+import { mobileBridge } from "../mobile/bridge";
+export { mobile } from "../mobile/bridge";
+export const bridge = window.agentview || mobileBridge();
+if (bridge && !window.agentview) window.agentview = bridge;
 export const invoke = (method: string, params?: any): Promise<any> =>
   bridge
     ? bridge.invoke(method, params).catch((error: Error) => {

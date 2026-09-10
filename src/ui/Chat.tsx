@@ -258,6 +258,7 @@ type Props = {
 };
 export function Chat(props: Props) {
   const [text, setText] = useState("");
+  const drafts = useRef(new Map<string, string>());
   const [sending, setSending] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [confirmClear, setConfirmClear] = useState<"archive" | "delete">();
@@ -270,7 +271,7 @@ export function Chat(props: Props) {
   const input = useRef<HTMLTextAreaElement>(null);
   const active = Boolean(
     props.thread?.owned &&
-      props.page?.turns.some((t) => t.status === "inProgress"),
+    props.page?.turns.some((t) => t.status === "inProgress"),
   );
   const currentModel = props.models.find((m) => m.id === model);
   useEffect(() => {
@@ -281,7 +282,7 @@ export function Chat(props: Props) {
         "",
     );
     setEffort(props.thread?.reasoningEffort || "high");
-    setText("");
+    setText(drafts.current.get(props.thread?.id || "new") || "");
     setConfirmClear(undefined);
     setSentNotice("");
     follow.current = true;
@@ -320,6 +321,7 @@ export function Chat(props: Props) {
         effort,
         noteId: props.attachment?.id,
       });
+      drafts.current.delete(props.thread?.id || "new");
       setText("");
       props.onDetach();
       if (result.steered)
@@ -476,21 +478,20 @@ export function Chat(props: Props) {
               </select>
             </label>
             <div className="starter-prompts">
-              {[
-                "Explore the company brain",
-                "What should we work on next?",
-              ].map((s) => (
-                <button
-                  key={s}
-                  onClick={() => {
-                    setText(s);
-                    input.current?.focus();
-                  }}
-                >
-                  {s}
-                  <ArrowUp size={13} />
-                </button>
-              ))}
+              {["Explore this workspace", "What should we work on next?"].map(
+                (s) => (
+                  <button
+                    key={s}
+                    onClick={() => {
+                      setText(s);
+                      input.current?.focus();
+                    }}
+                  >
+                    {s}
+                    <ArrowUp size={13} />
+                  </button>
+                ),
+              )}
             </div>
           </div>
         ) : (
@@ -571,9 +572,13 @@ export function Chat(props: Props) {
             }
             value={text}
             disabled={props.thread?.archived}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => {
+              setText(e.target.value);
+              drafts.current.set(props.thread?.id || "new", e.target.value);
+            }}
             onKeyDown={(e) => {
               if (
+                !window.matchMedia("(pointer: coarse)").matches &&
                 e.key === "Enter" &&
                 !e.shiftKey &&
                 !e.nativeEvent.isComposing
@@ -667,9 +672,10 @@ export function Chat(props: Props) {
                 ? "Agent unavailable"
                 : "Host disconnected"}
           </span>
-          <span>
+          <span className="keyboard-hint">
             ↵ send <b>·</b> shift ↵ newline
           </span>
+          <span className="touch-hint">Tap the arrow to send</span>
         </div>
       </div>
     </aside>

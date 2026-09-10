@@ -8,6 +8,7 @@ import "@fontsource/manrope/latin-400.css";
 import "@fontsource/manrope/latin-500.css";
 import "@fontsource/manrope/latin-600.css";
 import "./styles.css";
+import "./mobile.css";
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <App />
