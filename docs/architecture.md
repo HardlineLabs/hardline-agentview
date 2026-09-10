@@ -80,6 +80,9 @@ search, attachment, desktop history and the tray lifecycle, saving screenshots
 under `.local/smoke`. Set `AGENTVIEW_LIVE_TEST=1` for an additional real read-only
 agent turn; that uses the signed-in account and creates a conversation.
 Set `AGENTVIEW_PACKAGED=1` to run the same checks against the packaged app payloads.
+After packaging, `node scripts/portable-smoke.mjs` launches the actual portable
+executables and verifies their independent roles, TLS pairing and live vault.
+It uses isolated settings and closes only the process trees it creates.
 
 `npm run package` builds two portable Windows executables. Packaging and local
 checks publish nothing. The GitHub workflow validates branches independently.
