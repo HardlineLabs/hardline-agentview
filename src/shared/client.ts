@@ -49,17 +49,29 @@ export class WorkspaceConnection {
   ) {}
   connect(config: Connection) {
     this.disconnect();
+    if (config.routePreference === "remote" && !config.remoteAddress) {
+      this.emit({
+        type: "connection",
+        state: "error",
+        message:
+          "This invitation has no remote endpoint. Configure Remote access in Host, then create a new invitation.",
+      });
+      return;
+    }
     this.config = { ...config };
-    this.remote = false;
+    this.remote = config.routePreference === "remote";
     this.attempts = 0;
     this.connectionDeadline = setTimeout(() => {
       this.disconnect();
       this.emit({
         type: "connection",
         state: "error",
-        message: config.remoteAddress
-          ? "Could not reach your workspace locally or remotely. Check that Host and its remote tunnel are running, then try a fresh invitation."
-          : "This invitation only works on the host's local network. For remote access, configure Remote access in Host and create a new invitation.",
+        message:
+          config.routePreference === "local"
+            ? "Could not reach Host on the LAN. Use Remote when you are away from the host's network."
+            : config.remoteAddress
+              ? "Could not reach your workspace locally or remotely. Check that Host and its remote tunnel are running, then try a fresh invitation."
+              : "This invitation only works on the host's local network. For remote access, configure Remote access in Host and create a new invitation.",
       });
     }, 30_000);
     this.open();
@@ -219,7 +231,11 @@ export class WorkspaceConnection {
         if (!this.config) return;
         // Every new connection cycle tries LAN first. A failed LAN attempt falls back once.
         this.remote =
-          !authenticated && !remote && Boolean(config.remoteAddress);
+          config.routePreference === "remote" ||
+          (config.routePreference !== "local" &&
+            !authenticated &&
+            !remote &&
+            Boolean(config.remoteAddress));
         this.emit({
           type: "connection",
           state: "reconnecting",

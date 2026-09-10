@@ -465,11 +465,12 @@ function Connect({
 }: {
   state: string;
   message: string;
-  onConnect: (code: string, address: string) => void;
+  onConnect: (code: string, address: string, routePreference: string) => void;
 }) {
   const [code, setCode] = useState("");
   const [address, setAddress] = useState("");
   const [scanError, setScanError] = useState("");
+  const [routePreference, setRoutePreference] = useState("auto");
   const connecting = state === "connecting" || state === "reconnecting";
   return (
     <div className="connect-page">
@@ -500,9 +501,33 @@ function Connect({
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            onConnect(code, address);
+            onConnect(code, address, routePreference);
           }}
         >
+          <fieldset className="connection-routes" disabled={connecting}>
+            <legend>Connection route</legend>
+            {[
+              ["auto", "Auto"],
+              ["local", "LAN"],
+              ["remote", "Remote"],
+            ].map(([value, label]) => (
+              <button
+                type="button"
+                key={value}
+                aria-pressed={routePreference === value}
+                onClick={() => setRoutePreference(value)}
+              >
+                {label}
+              </button>
+            ))}
+          </fieldset>
+          <div className="connection-route-hint">
+            {routePreference === "remote"
+              ? "Connect through the internet. Skip LAN."
+              : routePreference === "local"
+                ? "Connect only over the host's local network."
+                : "Try LAN first, then the remote endpoint."}
+          </div>
           {mobile && (
             <button
               type="button"
@@ -513,7 +538,7 @@ function Connect({
                 try {
                   const result = await invoke("connection.scan");
                   setCode(result.value);
-                  onConnect(result.value, "");
+                  onConnect(result.value, "", routePreference);
                 } catch (e: any) {
                   setScanError(e.message);
                 }
@@ -824,12 +849,14 @@ function ClientApp() {
     ).values(),
   ];
   const activeAgents = snapshot?.agents.filter((a) => a.active) || [];
-  const connect = (code: string, address: string) => {
+  const connect = (code: string, address: string, routePreference: string) => {
     setConnectionError("");
-    void invoke("connection.connect", { code, address }).catch((e) => {
-      setConnection("error");
-      setConnectionError(e.message);
-    });
+    void invoke("connection.connect", { code, address, routePreference }).catch(
+      (e) => {
+        setConnection("error");
+        setConnectionError(e.message);
+      },
+    );
   };
   return (
     <div

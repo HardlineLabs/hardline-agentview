@@ -16,7 +16,10 @@ safeStorage or Android Keystore. Host lists paired devices and can remove one
 without changing other devices' credentials. Removing access closes active
 sessions. Each host supports up to 100 paired devices.
 
-Clients try the paired LAN endpoint first. If it is unavailable, they use the
+Choose **Auto**, **LAN**, or **Remote** before scanning or pasting an invitation.
+Remote skips LAN entirely; LAN never falls back to the internet. The selection
+is remembered with a successful pairing. The connected route stays visible.
+In Auto, clients try the paired LAN endpoint first. If it is unavailable, they use the
 configured remote WSS endpoint. LAN validates the exact pinned host certificate;
 remote validates the public certificate chain and hostname. Both paths additionally
 use the same end-to-end encrypted protocol. A remote endpoint change requires an
