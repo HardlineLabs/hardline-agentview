@@ -109,6 +109,13 @@ function HostApp() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [networkReady, setNetworkReady] = useState(false);
+  const [networkBusy, setNetworkBusy] = useState(false);
+  useEffect(() => {
+    void invoke("host.networkStatus")
+      .then(setNetworkReady)
+      .catch(() => {});
+  }, [status?.settings.port]);
   useEffect(() => {
     void invoke("host.status").then((s) => {
       setStatus(s);
@@ -279,6 +286,41 @@ function HostApp() {
             {status?.addresses.map((a) => (
               <code key={a}>{a.replace("wss://", "")}</code>
             ))}
+          </div>
+          <div className="network-setup">
+            <button
+              className="secondary"
+              disabled={networkBusy || networkReady || !status?.running}
+              onClick={async () => {
+                setNetworkBusy(true);
+                setError("");
+                try {
+                  setNetworkReady(await invoke("host.networkAllow"));
+                } catch (e: any) {
+                  setError(e.message);
+                } finally {
+                  setNetworkBusy(false);
+                }
+              }}
+            >
+              {networkReady ? (
+                <Check size={14} />
+              ) : networkBusy ? (
+                <LoaderCircle className="spin" size={14} />
+              ) : (
+                <Radio size={14} />
+              )}{" "}
+              {networkReady
+                ? "LAN access enabled"
+                : networkBusy
+                  ? "Waiting for Windows approval…"
+                  : "Allow LAN connections"}
+            </button>
+            <p>
+              Allows this host port from your local network.
+              <br />
+              Windows may ask for administrator approval.
+            </p>
           </div>
         </div>
         <p className="host-footer">

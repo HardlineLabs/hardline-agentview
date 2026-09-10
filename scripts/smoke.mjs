@@ -1,5 +1,5 @@
 import { _electron as electron } from "playwright";
-import { mkdir, writeFile, readFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import assert from "node:assert/strict";
 
@@ -24,9 +24,18 @@ const env = { ...process.env };
 delete env.ELECTRON_RUN_AS_NODE;
 let host, client;
 const errors = [];
+const packaged = process.env.AGENTVIEW_PACKAGED === "1";
 try {
   host = await electron.launch({
-    args: [root, "--role=host"],
+    ...(packaged
+      ? {
+          executablePath: path.join(
+            root,
+            "out/host/win-unpacked/AgentView Host.exe",
+          ),
+          args: [],
+        }
+      : { args: [root, "--role=host"] }),
     env: { ...env, AGENTVIEW_DATA_DIR: hostData },
   });
   const hw = await host.firstWindow();
@@ -43,7 +52,15 @@ try {
   assert.ok(status.notes > 0);
   await hw.screenshot({ path: path.join(dir, "host.png") });
   client = await electron.launch({
-    args: [root, "--role=client"],
+    ...(packaged
+      ? {
+          executablePath: path.join(
+            root,
+            "out/client/win-unpacked/AgentView.exe",
+          ),
+          args: [],
+        }
+      : { args: [root, "--role=client"] }),
     env: { ...env, AGENTVIEW_DATA_DIR: path.join(dir, "client") },
   });
   const cw = await client.firstWindow();
@@ -70,6 +87,17 @@ try {
     await cw.waitForSelector(".turn", { timeout: 20_000 });
   }
   await cw.screenshot({ path: path.join(dir, "conversation.png") });
+  await client.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0].setSize(1100, 760),
+  );
+  await cw.getByRole("button", { name: "Fit graph", exact: true }).click();
+  await cw.waitForTimeout(400);
+  await cw.screenshot({ path: path.join(dir, "compact.png") });
+  assert.ok(await cw.getByLabel("Message your agent").isVisible());
+  await client.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0].setSize(1500, 940),
+  );
+  await cw.getByRole("button", { name: "Fit graph", exact: true }).click();
   if (process.env.AGENTVIEW_LIVE_TEST === "1") {
     await cw
       .getByRole("button", { name: "New conversation", exact: false })

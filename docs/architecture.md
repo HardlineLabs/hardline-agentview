@@ -27,6 +27,10 @@ the LAN address, a random access token and the host certificate fingerprint.
 The client checks the pinned certificate before sending the token. Pairing needs
 no accounts, domain, certificate authority or router forwarding. Treat the key
 as access to the workspace; do not publish it. This is designed for a private LAN.
+The optional **Allow LAN connections** action asks Windows for administrator
+approval and creates or updates the single `Hardline-AgentView-LAN` inbound rule:
+TCP on the configured port, limited to `LocalSubnet`, on any Windows profile.
+It never changes the network's Public/Private classification.
 
 The desktop main process owns the socket; the renderer receives a narrow IPC API.
 Typed events carry graph snapshots, activity, conversation deltas and approvals.
@@ -59,6 +63,13 @@ target a node; unrecognized work orbits the graph. Filesystem changes pulse node
 without inventing an agent attribution. Private reasoning is omitted. Subagent
 detail is limited to events the installed runtime forwards.
 
+A read-only session observer follows only rollout paths returned by the local
+app-server, within its sessions directory. It reads bounded incremental JSONL
+chunks to surface existing desktop work and recover original tool targets hidden
+behind runtime wrappers. Tool-input classification is best effort; mixed shell
+commands can only be summarized approximately. Reasoning, user messages and tool
+outputs are never interpreted as activity. This adapter is version-sensitive.
+
 ## Validation
 
 `npm run check` runs TypeScript, unit/integration tests and the production build.
@@ -68,6 +79,7 @@ TLS/token rejection, connection recovery and streamed conversation ordering.
 search, attachment, desktop history and the tray lifecycle, saving screenshots
 under `.local/smoke`. Set `AGENTVIEW_LIVE_TEST=1` for an additional real read-only
 agent turn; that uses the signed-in account and creates a conversation.
+Set `AGENTVIEW_PACKAGED=1` to run the same checks against the packaged app payloads.
 
 `npm run package` builds two portable Windows executables. Packaging and local
 checks publish nothing. The GitHub workflow validates branches independently.

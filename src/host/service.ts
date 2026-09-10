@@ -9,6 +9,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { Vault } from "./vault";
 import { Codex, findCodex } from "./codex";
 import { applyConversationEvent } from "../shared/conversation";
+import { SessionObserver, type ObservedAction } from "./observer";
 import type {
   Activity,
   Agent,
@@ -93,6 +94,7 @@ export class HostService extends EventEmitter {
   private activeTurns = new Map<string, string>();
   private liveThreads = new Map<string, Thread>();
   private liveTurns = new Map<string, Turn[]>();
+  private observer?: SessionObserver;
   private commands = new Map<string, Promise<any>>();
   private poll?: NodeJS.Timeout;
   private heartbeat?: NodeJS.Timeout;
@@ -125,6 +127,12 @@ export class HostService extends EventEmitter {
     });
     this.codex.on("notification", (message) => this.onAgentEvent(message));
     this.codex.on("request", (request) => {
+      if (request.params?.threadId)
+        this.setAgent(request.params.threadId, {
+          action: "waiting",
+          active: true,
+          detail: "Waiting for your response",
+        });
       this.approvals.set(request.id, request);
       this.broadcast({
         type: "approvals",
@@ -277,6 +285,29 @@ export class HostService extends EventEmitter {
   async connectAgent() {
     try {
       await this.codex.start(await findCodex(this.settings.codexPath));
+      if (this.codex.codexHome) {
+        this.observer = new SessionObserver(this.codex.codexHome);
+        this.observer.on("activity", (event: ObservedAction) => {
+          const target = this.vault.matchTarget(event.targetText);
+          this.setAgent(event.threadId, {
+            action: event.action,
+            active: event.active,
+            target,
+            parentId: event.parentId,
+            name: event.name,
+          });
+          if (event.active && event.action !== "working")
+            this.record({
+              threadId: event.threadId,
+              agentId: event.threadId,
+              action: event.action,
+              target,
+              detail: target
+                ? `${event.action} ${path.basename(target)}`
+                : `${event.name} · ${event.action}`,
+            });
+        });
+      }
       const result = await this.codex.rpc("model/list");
       this.models = result.data || [];
       await this.refreshThreads();
@@ -308,6 +339,7 @@ export class HostService extends EventEmitter {
       this.threads = [...merged.values()].sort(
         (a, b) => b.updatedAt - a.updatedAt,
       );
+      await this.observer?.track(this.threads);
       this.broadcast({ type: "threads", threads: this.threads });
     } catch (e: any) {
       this.emit("diagnostic", e.message);
@@ -466,7 +498,20 @@ export class HostService extends EventEmitter {
           turns.set(turn.id, turn);
       return {
         thread: { ...thread!, owned: this.owned.has(p.id) },
-        turns: [...turns.values()],
+        turns: [...turns.values()].map((turn) =>
+          this.owned.has(p.id) &&
+          !this.loaded.has(p.id) &&
+          turn.status === "inProgress"
+            ? {
+                ...turn,
+                status: "interrupted",
+                error: {
+                  message:
+                    "The host restarted before this turn completed. Send a message to continue.",
+                },
+              }
+            : turn,
+        ),
         nextCursor,
       };
     }
@@ -651,6 +696,7 @@ export class HostService extends EventEmitter {
     for (const socket of this.sockets) socket.close(1001, "Host stopped");
     this.sockets.clear();
     await this.vault.close();
+    await this.observer?.close();
     this.codex.close();
     await new Promise<void>((resolve) => {
       if (!this.server?.listening) return resolve();

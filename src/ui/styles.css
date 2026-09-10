@@ -2061,6 +2061,22 @@ kbd {
   text-align: center;
   margin-top: 2px;
 }
+.network-setup {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+.network-setup button {
+  font-size: 10px;
+  padding: 9px 10px;
+  flex-shrink: 0;
+}
+.network-setup p {
+  font-size: 8px;
+  line-height: 1.8;
+  color: #6d8792;
+}
 @media (min-width: 1700px) {
   .sidebar {
     width: 240px;

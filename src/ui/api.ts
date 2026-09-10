@@ -3,7 +3,12 @@ export const bridge = window.agentview;
 export const invoke = (method: string, params?: any): Promise<any> =>
   bridge
     ? bridge.invoke(method, params).catch((error: Error) => {
-        throw new Error(error.message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, ''));
+        throw new Error(
+          error.message.replace(
+            /^Error invoking remote method '[^']+': (?:Error: )?/,
+            "",
+          ),
+        );
       })
     : Promise.reject(new Error("Open AgentView from the desktop application."));
 export const subscribe = (callback: (event: AppEvent) => void) =>

@@ -93,7 +93,9 @@ function Item({ item }: { item: ChatItem }) {
       </div>
     );
   const text =
-    item.command ||
+    (item.type === "commandExecution"
+      ? "Run a command on the host"
+      : undefined) ||
     (item.type === "fileChange"
       ? item.changes?.map((c) => c.path.split(/[\\/]/).pop()).join(", ")
       : String(item.tool || item.query || item.type));
@@ -197,6 +199,22 @@ function ApprovalCard({
             "The agent needs permission to continue."}
         </p>
       )}
+      {!questions &&
+        (approval.params.command ||
+          approval.params.permissions ||
+          approval.params.changes) && (
+          <details className="tool-item" open>
+            <summary>Requested action</summary>
+            <pre>
+              {approval.params.command ||
+                JSON.stringify(
+                  approval.params.permissions || approval.params.changes,
+                  null,
+                  2,
+                )}
+            </pre>
+          </details>
+        )}
       <div className="approval-actions">
         {!questions && (
           <button disabled={busy} onClick={() => void respond(false)}>
@@ -242,8 +260,10 @@ export function Chat(props: Props) {
   const scroll = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
   const input = useRef<HTMLTextAreaElement>(null);
-  const active =
-    props.page?.turns.some((t) => t.status === "inProgress") || false;
+  const active = Boolean(
+    props.thread?.owned &&
+    props.page?.turns.some((t) => t.status === "inProgress"),
+  );
   const currentModel = props.models.find((m) => m.id === model);
   useEffect(() => {
     setModel(

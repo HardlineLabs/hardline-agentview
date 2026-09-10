@@ -33,6 +33,7 @@ export type Activity = {
   time: number;
 };
 export type Thread = {
+  path?: string;
   id: string;
   name?: string | null;
   preview: string;

@@ -45,6 +45,7 @@ test("TLS pairing, identity rejection, live snapshots, and reconnect", async () 
   host.codex.rpc = async () => ({ data: [] });
   const client = new ClientConnection();
   const invalid = new ClientConnection();
+  let replacement: HostService | undefined;
   try {
     await host.start();
     const config = host.localConnection();
@@ -68,6 +69,20 @@ test("TLS pairing, identity rejection, live snapshots, and reconnect", async () 
       client.request("command.exec", { command: "anything" }),
       /Unknown/,
     );
+    let response: unknown;
+    host.codex.respond = (_id, result) => {
+      response = result;
+    };
+    host.codex.emit("request", {
+      id: 77,
+      method: "item/commandExecution/requestApproval",
+      params: { threadId: "test", command: "read Home.md" },
+    });
+    assert.equal(response, undefined, "Approvals are never silently accepted");
+    assert.equal(host.snapshot().approvals.length, 1);
+    await client.request("approval.respond", { id: 77, allow: false });
+    assert.deepEqual(response, { decision: "decline" });
+    assert.equal(host.snapshot().approvals.length, 0);
     client.disconnect();
     const reconnect = eventWhere(client, (e) => e.type === "snapshot");
     client.connect(config);
@@ -83,10 +98,28 @@ test("TLS pairing, identity rejection, live snapshots, and reconnect", async () 
       unauthorized.send(JSON.stringify({ type: "auth", token: "wrong" })),
     );
     assert.equal(await denied, 4003);
+    const restored = eventWhere(client, (e) => e.type === "snapshot");
+    await host.stop();
+    replacement = new HostService(
+      { ...host.settings },
+      path.join(root, "data"),
+    );
+    replacement.codex.start = async () => {
+      replacement!.codex.ready = true;
+    };
+    replacement.codex.rpc = async () => ({ data: [] });
+    await replacement.start();
+    await restored;
+    assert.equal(
+      client.connected,
+      true,
+      "Client automatically reconnects after host restart",
+    );
   } finally {
     client.disconnect();
     invalid.disconnect();
     await host.stop();
+    await replacement?.stop();
     await fs.rm(root, { recursive: true, force: true });
   }
 });

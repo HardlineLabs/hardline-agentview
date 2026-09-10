@@ -15,6 +15,7 @@ import path from "node:path";
 import os from "node:os";
 import { HostService, decodeConnection } from "../host/service";
 import { ClientConnection } from "./connection";
+import { enableNetworkAccess, networkAccessEnabled } from "./firewall";
 import type { HostSettings, AppEvent, HostStatus } from "../shared/types";
 
 const role =
@@ -95,7 +96,7 @@ if (!app.requestSingleInstanceLock()) {
     }
     window = new BrowserWindow({
       width: role === "host" ? 620 : 1500,
-      height: role === "host" ? 760 : 940,
+      height: role === "host" ? 840 : 940,
       minWidth: role === "host" ? 540 : 940,
       minHeight: 650,
       backgroundColor: "#0b1014",
@@ -172,6 +173,12 @@ if (!app.requestSingleInstanceLock()) {
     async (_event, method: string, params: any = {}) => {
       if (method === "app.info") return { role, version: app.getVersion() };
       if (role === "host") {
+        if (method === "host.networkStatus")
+          return networkAccessEnabled(settings.port);
+        if (method === "host.networkAllow") {
+          await enableNetworkAccess(settings.port);
+          return true;
+        }
         if (method === "host.status") return hostStatus();
         if (method === "host.copy") {
           clipboard.writeText(hostStatus().pairingCode);
