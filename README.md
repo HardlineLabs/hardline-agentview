@@ -39,6 +39,32 @@ an AgentView branch with its history. Conversations created in AgentView continu
 in place. All commands and file work run on the host. The host owns the agent
 process, so disconnecting the client does not cancel a running turn.
 
+The explorer includes every page of local Codex conversations, including archived
+chats and subagents. Search chats or filter by project and category. **Archive**
+clears a conversation from the active list; open **Archived** to restore it.
+**Delete** permanently removes it from Codex on the host after confirmation.
+Archive and deletion also apply to spawned subagent chats. Let active work finish
+or stop it before clearing its conversation.
+
+The chat's **Context** gauge shows the latest reported token use against the
+model's context window, with cumulative conversation tokens underneath. Codex can
+compact history, so context use can fall while the cumulative total keeps growing.
+**Codex limits** in the sidebar shows account usage, reset times and reported
+credit balances. Missing metrics are labeled, rather than estimated.
+
+While an AgentView agent works, type into the composer and press **Steer agent**
+or Enter to send more direction without stopping its turn. **Stop agent** remains
+available separately. Steering applies to turns running in AgentView; an existing
+Desktop conversation still continues in a new AgentView branch.
+
+Agents travel at a calm, display-independent pace. Bright animated connections
+reach toward the file they are using. Command work without a known file target
+connects to the separate **Terminal** node; other work connects to **Agent
+workspace**. Click a busy station or an agent to open its chat. Graph labels settle
+when untouched, while activity stays animated. Rendering follows the monitor's
+native pixel density and browser refresh timing, including after moving between
+monitors. The app does not change Windows display settings.
+
 ## Build
 
 Requires Windows, Node.js 24 and an installed, signed-in Codex runtime for agent

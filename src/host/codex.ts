@@ -4,6 +4,7 @@ import { EventEmitter } from "node:events";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { version } from "../../package.json";
 
 export async function findCodex(configured?: string): Promise<string> {
   if (configured) {
@@ -76,7 +77,7 @@ export class Codex extends EventEmitter {
       clientInfo: {
         name: "hardline_agentview",
         title: "Hardline AgentView",
-        version: "0.1.0",
+        version,
       },
       capabilities: { experimentalApi: true },
     });

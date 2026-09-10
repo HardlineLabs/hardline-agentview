@@ -48,6 +48,34 @@ export type Thread = {
   source?: unknown;
   status: { type: string };
   owned?: boolean;
+  archived?: boolean;
+  section?: { id: string; name: string } | null;
+  usage?: TokenUsage;
+};
+export type TokenUsage = {
+  total: { totalTokens: number };
+  last: { totalTokens: number };
+  modelContextWindow: number | null;
+};
+export type RateLimit = {
+  limitId?: string | null;
+  limitName?: string | null;
+  primary?: {
+    usedPercent: number;
+    windowDurationMins: number | null;
+    resetsAt: number | null;
+  } | null;
+  secondary?: RateLimit["primary"];
+  credits?: {
+    hasCredits: boolean;
+    unlimited: boolean;
+    balance?: string | null;
+  } | null;
+};
+export type AccountLimits = {
+  buckets: RateLimit[];
+  checkedAt: number;
+  error?: string;
 };
 export type ChatItem = {
   id: string;
@@ -71,7 +99,12 @@ export type ChatPage = {
   turns: Turn[];
   nextCursor: string | null;
 };
-export type Project = { id: string; name: string; path: string };
+export type Project = {
+  id: string;
+  name: string;
+  path: string;
+  runtime?: boolean;
+};
 export type Model = {
   id: string;
   displayName: string;
@@ -92,6 +125,8 @@ export type Snapshot = {
   activity: Activity[];
   approvals: Approval[];
   models: Model[];
+  limits?: AccountLimits;
+  sections?: { id: string; name: string }[];
   host: {
     name: string;
     vault: string;

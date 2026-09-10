@@ -15,7 +15,11 @@ import {
   LoaderCircle,
   MessageSquare,
   ArrowLeft,
+  Archive,
+  ArchiveRestore,
+  Trash2,
 } from "lucide-react";
+import { ContextUsage } from "./Usage";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { invoke } from "./api";
@@ -250,10 +254,14 @@ type Props = {
   onLoadMore: () => void;
   onError: (message: string) => void;
   onHide: () => void;
+  onCleared: () => void;
 };
 export function Chat(props: Props) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [confirmClear, setConfirmClear] = useState<"archive" | "delete">();
+  const [sentNotice, setSentNotice] = useState("");
   const [model, setModel] = useState("");
   const [effort, setEffort] = useState("high");
   const [projectId, setProjectId] = useState("vault");
@@ -262,7 +270,7 @@ export function Chat(props: Props) {
   const input = useRef<HTMLTextAreaElement>(null);
   const active = Boolean(
     props.thread?.owned &&
-    props.page?.turns.some((t) => t.status === "inProgress"),
+      props.page?.turns.some((t) => t.status === "inProgress"),
   );
   const currentModel = props.models.find((m) => m.id === model);
   useEffect(() => {
@@ -274,6 +282,8 @@ export function Chat(props: Props) {
     );
     setEffort(props.thread?.reasoningEffort || "high");
     setText("");
+    setConfirmClear(undefined);
+    setSentNotice("");
     follow.current = true;
   }, [props.thread?.id]);
   useEffect(() => {
@@ -285,7 +295,14 @@ export function Chat(props: Props) {
       scroll.current.scrollTop = scroll.current.scrollHeight;
   }, [props.page, sending]);
   const send = async () => {
-    if (!text.trim() || sending || active || !props.connected) return;
+    if (
+      !text.trim() ||
+      sending ||
+      !props.connected ||
+      !props.ready ||
+      props.thread?.archived
+    )
+      return;
     setSending(true);
     try {
       let id = props.thread?.id;
@@ -293,8 +310,11 @@ export function Chat(props: Props) {
         const thread = await invoke("thread.create", { projectId, model });
         id = thread.id;
       }
-      const result = await invoke("thread.send", {
+      const result = await invoke(active ? "thread.steer" : "thread.send", {
         id,
+        expectedTurnId: props.page?.turns
+          .filter((t) => t.status === "inProgress")
+          .at(-1)?.id,
         text,
         model,
         effort,
@@ -302,13 +322,30 @@ export function Chat(props: Props) {
       });
       setText("");
       props.onDetach();
-      props.onSent(result.threadId, result.turn);
+      if (result.steered)
+        setSentNotice("Steering message accepted by the active agent.");
+      else props.onSent(result.threadId, result.turn);
       follow.current = true;
     } catch (e: any) {
       props.onError(e.message);
     } finally {
       setSending(false);
       input.current?.focus();
+    }
+  };
+  const clear = async (action: "archive" | "unarchive" | "delete") => {
+    setClearing(true);
+    try {
+      await invoke(`thread.${action}`, {
+        id: props.thread!.id,
+        confirm: action === "delete" ? props.thread!.id : undefined,
+      });
+      setConfirmClear(undefined);
+      props.onCleared();
+    } catch (e: any) {
+      props.onError(e.message);
+    } finally {
+      setClearing(false);
     }
   };
   return (
@@ -341,6 +378,64 @@ export function Chat(props: Props) {
           <ChevronDown size={17} />
         </button>
       </header>
+      {props.thread && (
+        <>
+          <div className="chat-management">
+            <button
+              disabled={!props.connected || clearing || active}
+              onClick={() =>
+                props.thread?.archived
+                  ? void clear("unarchive")
+                  : setConfirmClear("archive")
+              }
+            >
+              {props.thread.archived ? (
+                <ArchiveRestore size={13} />
+              ) : (
+                <Archive size={13} />
+              )}
+              {props.thread.archived ? "Restore" : "Archive"}
+            </button>
+            <button
+              disabled={!props.connected || clearing || active}
+              onClick={() => setConfirmClear("delete")}
+            >
+              <Trash2 size={13} /> Delete
+            </button>
+            {props.thread.section && <small>{props.thread.section.name}</small>}
+          </div>
+          {confirmClear && (
+            <div
+              className="clear-confirm"
+              role="alertdialog"
+              aria-label="Confirm conversation action"
+            >
+              <p>
+                {confirmClear === "delete"
+                  ? "Permanently delete this chat and its subagent chats from Codex on the host? This cannot be undone."
+                  : "Archive this chat and its subagent chats in Codex on the host? You can restore archived chats later."}
+              </p>
+              <button
+                disabled={clearing}
+                onClick={() => setConfirmClear(undefined)}
+              >
+                Cancel
+              </button>
+              <button
+                disabled={clearing}
+                onClick={() => void clear(confirmClear)}
+              >
+                {clearing
+                  ? "Working…"
+                  : confirmClear === "delete"
+                    ? "Delete permanently"
+                    : "Archive conversation"}
+              </button>
+            </div>
+          )}
+          <ContextUsage usage={props.thread.usage} />
+        </>
+      )}
       <div
         className="chat-scroll"
         ref={scroll}
@@ -439,6 +534,16 @@ export function Chat(props: Props) {
           ))}
       </div>
       <div className="composer-area">
+        {sentNotice && (
+          <div className="branch-hint" role="status">
+            {sentNotice}
+          </div>
+        )}
+        {props.thread?.archived && (
+          <div className="branch-hint">
+            Archived conversation · Restore to continue
+          </div>
+        )}
         {props.thread && !props.thread.owned && (
           <div className="branch-hint">
             <GitBranch size={12} /> Continues in a new AgentView branch
@@ -459,10 +564,13 @@ export function Chat(props: Props) {
             aria-label="Message your agent"
             placeholder={
               props.connected
-                ? "Give your ideas somewhere to go…"
+                ? active
+                  ? "Steer the agent while it works…"
+                  : "Give your ideas somewhere to go…"
                 : "Reconnect to continue…"
             }
             value={text}
+            disabled={props.thread?.archived}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
               if (
@@ -480,6 +588,7 @@ export function Chat(props: Props) {
             <div className="model-controls">
               <select
                 aria-label="Model"
+                disabled={active}
                 value={model}
                 onChange={(e) => {
                   setModel(e.target.value);
@@ -497,6 +606,7 @@ export function Chat(props: Props) {
               </select>
               <select
                 aria-label="Reasoning effort"
+                disabled={active}
                 value={effort}
                 onChange={(e) => setEffort(e.target.value)}
               >
@@ -511,7 +621,7 @@ export function Chat(props: Props) {
                 ))}
               </select>
             </div>
-            {active ? (
+            {active && (
               <button
                 className="send-button stop"
                 title="Stop agent"
@@ -523,12 +633,17 @@ export function Chat(props: Props) {
               >
                 <Square size={14} fill="currentColor" />
               </button>
-            ) : (
+            )}
+            {
               <button
                 className="send-button"
-                title="Send message"
+                title={active ? "Steer agent" : "Send message"}
                 disabled={
-                  !text.trim() || sending || !props.connected || !props.ready
+                  !text.trim() ||
+                  sending ||
+                  !props.connected ||
+                  !props.ready ||
+                  props.thread?.archived
                 }
                 onClick={() => void send()}
               >
@@ -538,7 +653,7 @@ export function Chat(props: Props) {
                   <ArrowUp size={18} />
                 )}
               </button>
-            )}
+            }
           </div>
         </div>
         <div className="composer-foot">
