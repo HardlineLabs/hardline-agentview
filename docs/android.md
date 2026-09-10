@@ -6,6 +6,10 @@ It uses OkHttp for pinned LAN TLS and publicly validated remote TLS, and Android
 Keystore to encrypt its saved device credential. Backups and release WebView
 debugging are disabled. Camera access is requested only when scanning a pairing
 invitation; no camera image is sent to a server.
+The scanner stays portrait and uses a square capture area. Keep the complete QR
+code, including its white border, inside the frame. If focusing is difficult,
+move the phone farther from the host display. Pasting an invitation uses the same
+pairing protocol as scanning it.
 
 Chat occupies the phone screen. The drawer contains conversations, project and
 category filters, archived chats, account limits and settings. The compact live

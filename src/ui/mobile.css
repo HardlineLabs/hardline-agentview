@@ -7,6 +7,37 @@
 .touch-hint {
   display: none;
 }
+.connection-routes {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  gap: 6px;
+}
+.connection-routes legend {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.connection-routes button {
+  flex: 1;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 10px;
+  background: transparent;
+  color: var(--muted);
+}
+.connection-routes button[aria-pressed="true"] {
+  color: #b6dfd1;
+  background: #b6dfd112;
+  border-color: #b6dfd155;
+}
+.connection-route-hint {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+  margin: 8px 0 16px;
+}
 .remote-field {
   margin-top: 18px;
 }
@@ -24,11 +55,12 @@
   text-align: center;
 }
 .pairing-invitation img {
-  width: 250px;
+  width: 360px;
   max-width: 100%;
   border-radius: 12px;
   padding: 8px;
   background: white;
+  image-rendering: pixelated;
 }
 .pairing-invitation p {
   margin-top: 10px;
