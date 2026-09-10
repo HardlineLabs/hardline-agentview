@@ -1,5 +1,5 @@
 import https from "node:https";
-import { randomBytes, timingSafeEqual, X509Certificate } from "node:crypto";
+import { randomBytes, X509Certificate } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -34,25 +34,12 @@ import type {
   AccountLimits,
 } from "../shared/types";
 
-export function encodeConnection(c: Connection) {
-  return "agentview://" + Buffer.from(JSON.stringify(c)).toString("base64url");
-}
-export function decodeConnection(code: string): Connection {
-  const c = JSON.parse(
-    Buffer.from(
-      code.trim().replace(/^agentview:\/\//, ""),
-      "base64url",
-    ).toString(),
-  );
-  const url = new URL(c.address);
-  if (
-    url.protocol !== "wss:" ||
-    !c.token ||
-    !/^[A-Fa-f0-9:]{64,95}$/.test(c.fingerprint)
-  )
-    throw new Error("Paste the connection key from AgentView Host.");
-  return c;
-}
+export { encodeConnection, decodeConnection } from "../shared/pairing";
+import { encodeConnection } from "../shared/pairing";
+import { Devices } from "./devices";
+import { HostTunnel } from "./tunnel";
+import { SecurePeer } from "./secure-peer";
+
 export function visibleItems(items: ChatItem[]) {
   return items.filter((i) => !["reasoning", "hookPrompt"].includes(i.type));
 }
@@ -92,7 +79,8 @@ export class HostService extends EventEmitter {
   vault: Vault;
   codex = new Codex();
   private server?: https.Server;
-  private sockets = new Set<WebSocket>();
+  private webSockets?: WebSocketServer;
+  private sockets = new Set<SecurePeer>();
   private threads: Thread[] = [];
   private models: Model[] = [];
   private projects: Project[] = [];
@@ -110,11 +98,16 @@ export class HostService extends EventEmitter {
   private liveThreads = new Map<string, Thread>();
   private liveTurns = new Map<string, Turn[]>();
   private observer?: SessionObserver;
-  private commands = new Map<string, Promise<any>>();
+  private commands = new Map<
+    string,
+    { signature: string; result: Promise<any> }
+  >();
   private poll?: NodeJS.Timeout;
   private heartbeat?: NodeJS.Timeout;
   private refreshing = false;
-  private token = "";
+  private devices: Devices;
+  private tunnel = new HostTunnel();
+  private invitation?: Connection;
   private fingerprint = "";
   private started = Date.now();
   private error = "";
@@ -124,6 +117,8 @@ export class HostService extends EventEmitter {
     private dataDir: string,
   ) {
     super();
+    this.devices = new Devices(dataDir);
+    this.tunnel.on("status", () => this.emit("status"));
     this.vault = new Vault(settings.vaultPath);
     this.vault.on("graph", (graph) => {
       this.broadcast({ type: "graph", graph, projects: this.allProjects() });
@@ -182,7 +177,30 @@ export class HostService extends EventEmitter {
       };
       await fs.writeFile(certPath, JSON.stringify(identity), { mode: 0o600 });
     }
-    this.token = identity.token;
+    await this.devices.load();
+    if (
+      !new X509Certificate(identity.cert).subjectAltName?.includes(
+        "DNS:localhost",
+      )
+    ) {
+      const pair = await selfsigned.generate(
+        [{ name: "commonName", value: "localhost" }],
+        {
+          keySize: 2048,
+          days: 3650,
+          algorithm: "sha256",
+          extensions: [
+            {
+              name: "subjectAltName",
+              altNames: [{ type: 2, value: "localhost" }],
+            },
+          ],
+        },
+      );
+      identity = { ...identity, private: pair.private, cert: pair.cert };
+      await fs.writeFile(certPath, JSON.stringify(identity), { mode: 0o600 });
+    }
+    await fs.writeFile(path.join(this.dataDir, "host-cert.pem"), identity.cert);
     this.fingerprint = new X509Certificate(identity.cert).fingerprint256;
     try {
       this.owned = new Set(
@@ -205,41 +223,66 @@ export class HostService extends EventEmitter {
       server: this.server,
       maxPayload: 1_048_576,
     });
-    wss.on("connection", (socket) => {
-      let authenticated = false;
-      const timeout = setTimeout(
-        () => socket.close(4001, "Pairing required"),
-        5000,
-      );
-      socket.on("message", async (bytes) => {
-        let request: any;
-        try {
-          request = JSON.parse(bytes.toString());
-          if (!authenticated) {
-            const supplied = Buffer.from(String(request.token || ""));
-            const expected = Buffer.from(this.token);
-            if (
-              request.type !== "auth" ||
-              supplied.length !== expected.length ||
-              !timingSafeEqual(supplied, expected)
-            ) {
-              socket.close(4003, "Connection key does not match");
-              return;
-            }
-            authenticated = true;
-            clearTimeout(timeout);
-            this.sockets.add(socket);
-            socket.send(
-              JSON.stringify({ type: "snapshot", snapshot: this.snapshot() }),
+    this.webSockets = wss;
+    wss.on("connection", (rawSocket) => {
+      if (wss.clients.size > 120) {
+        rawSocket.close(4008, "Host is busy");
+        return;
+      }
+      let active = false;
+      let inFlight = 0;
+      const socket = new SecurePeer(
+        rawSocket,
+        this.devices,
+        (peer, credential, paired) => {
+          if (paired) {
+            peer.send(
+              JSON.stringify({
+                type: "paired",
+                credentialId: credential.id,
+                secret: credential.secret,
+              }),
             );
-            this.emit("status");
+          } else activate();
+          this.emit("status");
+        },
+        (request) => {
+          if (!active && request.type === "pairingSaved") {
+            activate();
             return;
           }
-          if (!request.id || typeof request.method !== "string")
+          if (!active)
+            return socket.close(4003, "Save pairing before continuing");
+          if (++inFlight > 32)
+            return socket.close(4008, "Too many pending actions");
+          void processRequest(request).finally(() => {
+            inFlight--;
+          });
+        },
+        () => {
+          this.sockets.delete(socket);
+          this.emit("status");
+        },
+      );
+      const activate = () => {
+        active = true;
+        this.sockets.add(socket);
+        socket.send(
+          JSON.stringify({ type: "snapshot", snapshot: this.snapshot() }),
+        );
+        this.emit("status");
+      };
+      const processRequest = async (request: any) => {
+        try {
+          if (
+            typeof request.id !== "string" ||
+            request.id.length > 80 ||
+            typeof request.method !== "string"
+          )
             throw new Error("Invalid request.");
-          const key = String(request.id);
+          const key = socket.deviceId + ":" + request.id;
+          const signature = JSON.stringify([request.method, request.params]);
           let result: any;
-          // Keep command outcomes through reconnect; duplicate sends never start a second turn.
           if (
             [
               "thread.send",
@@ -248,40 +291,38 @@ export class HostService extends EventEmitter {
               "thread.archive",
               "thread.unarchive",
               "thread.delete",
+              "thread.interrupt",
               "approval.respond",
             ].includes(request.method)
           ) {
-            if (!this.commands.has(key))
-              this.commands.set(
-                key,
-                this.handle(request.method, request.params || {}),
+            const existing = this.commands.get(key);
+            if (existing && existing.signature !== signature)
+              throw new Error(
+                "Request identifier was already used for another action.",
               );
-            result = await this.commands.get(key);
+            if (!existing)
+              this.commands.set(key, {
+                signature,
+                result: this.handle(request.method, request.params || {}),
+              });
+            result = await this.commands.get(key)!.result;
             if (this.commands.size > 500)
               this.commands.delete(this.commands.keys().next().value!);
           } else
             result = await this.handle(request.method, request.params || {});
-          if (socket.readyState === WebSocket.OPEN)
-            socket.send(
-              JSON.stringify({ type: "response", id: request.id, result }),
-            );
+          socket.send(
+            JSON.stringify({ type: "response", id: request.id, result }),
+          );
         } catch (e: any) {
-          if (socket.readyState === WebSocket.OPEN)
-            socket.send(
-              JSON.stringify({
-                type: "response",
-                id: request?.id,
-                error: e.message || "Request failed.",
-              }),
-            );
+          socket.send(
+            JSON.stringify({
+              type: "response",
+              id: request?.id,
+              error: e.message || "Request failed.",
+            }),
+          );
         }
-      });
-      socket.on("close", () => {
-        clearTimeout(timeout);
-        this.sockets.delete(socket);
-        this.emit("status");
-      });
-      socket.on("error", () => {});
+      };
     });
     await new Promise<void>((resolve, reject) => {
       this.server!.once("error", reject);
@@ -291,6 +332,7 @@ export class HostService extends EventEmitter {
       });
     });
     this.settings.port = (this.server.address() as { port: number }).port;
+    await this.createInvitation("New device");
     this.server.on("error", (e) => {
       this.error = e.message;
       this.emit("status");
@@ -298,6 +340,10 @@ export class HostService extends EventEmitter {
     this.heartbeat = setInterval(
       () => this.broadcast({ type: "heartbeat", time: Date.now() }),
       10_000,
+    );
+    this.tunnel.start(
+      this.settings.cloudflaredPath || "",
+      this.settings.tunnelConfig || "",
     );
     void this.connectAgent();
     this.poll = setInterval(() => void this.refreshThreads(), 6000);
@@ -863,24 +909,43 @@ export class HostService extends EventEmitter {
       settings: this.settings,
       error: this.error,
       addresses,
-      pairingCode: this.token
-        ? encodeConnection({
-            address: addresses[0] || `wss://127.0.0.1:${this.settings.port}`,
-            token: this.token,
-            fingerprint: this.fingerprint,
-          })
-        : "",
+      pairingCode: this.invitation ? encodeConnection(this.invitation) : "",
+      devices: this.devices.list(),
+      remoteStatus: this.tunnel.status,
       clients: this.sockets.size,
       notes: this.vault.graph.nodes.length,
       agentReady: this.codex.ready,
       agentError: this.codex.error,
     };
   }
-  localConnection(): Connection {
+  async createInvitation(name: string) {
+    const credential = await this.devices.invite(name);
+    const address =
+      this.status().addresses[0] || `wss://127.0.0.1:${this.settings.port}`;
+    this.invitation = this.devices.connection(
+      credential,
+      address,
+      this.fingerprint,
+      this.settings.remoteAddress,
+    );
+    this.emit("status");
     return {
+      code: encodeConnection(this.invitation),
+      expiresAt: credential.expiresAt,
+    };
+  }
+  async revokeDevice(id: string) {
+    await this.devices.revoke(id);
+    for (const socket of this.sockets)
+      if (socket.deviceId === id)
+        socket.close(4003, "This device was removed by the host.");
+    this.emit("status");
+  }
+  localConnection(): Connection {
+    if (!this.invitation) throw new Error("Start the host before pairing.");
+    return {
+      ...this.invitation,
       address: `wss://127.0.0.1:${this.settings.port}`,
-      token: this.token,
-      fingerprint: this.fingerprint,
     };
   }
   private broadcast(event: AppEvent) {
@@ -896,10 +961,12 @@ export class HostService extends EventEmitter {
   }
   async stop() {
     this.stopping = true;
+    this.tunnel.stop();
     clearInterval(this.poll);
     clearInterval(this.limitsPoll);
     clearInterval(this.heartbeat);
     for (const socket of this.sockets) socket.close(1001, "Host stopped");
+    for (const raw of this.webSockets?.clients || []) raw.terminate();
     this.sockets.clear();
     await this.vault.close();
     await this.observer?.close();

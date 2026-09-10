@@ -26,6 +26,10 @@ import {
   Power,
   PanelRightClose,
   PanelRightOpen,
+  Menu,
+  ArrowLeft,
+  ShieldCheck,
+  QrCode,
 } from "lucide-react";
 import { BrainGraph, type GraphControls } from "./Graph";
 import { UsageLimits } from "./Usage";
@@ -33,12 +37,14 @@ import { Chat, Markdown } from "./Chat";
 import {
   ago,
   bridge,
+  mobile,
   colors,
   domainLabel,
   invoke,
   role,
   subscribe,
 } from "./api";
+import QRCode from "qrcode";
 import { applyConversationEvent } from "../shared/conversation";
 import type {
   AppEvent,
@@ -78,6 +84,7 @@ export function Mark({ size = 28 }: { size?: number }) {
   );
 }
 function WindowBar() {
+  if (mobile) return null;
   return (
     <div className="window-bar">
       <div className="window-caption">
@@ -110,6 +117,32 @@ function HostApp() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [deviceName, setDeviceName] = useState("My device");
+  const [invitation, setInvitation] = useState<{
+    code: string;
+    expiresAt: number;
+    qr: string;
+  }>();
+  const [clock, setClock] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setClock(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const invite = async () => {
+    try {
+      const result = await invoke("host.invite", { name: deviceName });
+      setInvitation({
+        ...result,
+        qr: await QRCode.toDataURL(result.code, {
+          width: 280,
+          margin: 2,
+          errorCorrectionLevel: "M",
+        }),
+      });
+    } catch (e: any) {
+      setError(e.message);
+    }
+  };
   const [networkReady, setNetworkReady] = useState(false);
   const [networkBusy, setNetworkBusy] = useState(false);
   useEffect(() => {
@@ -131,6 +164,7 @@ function HostApp() {
     setError("");
     try {
       setStatus(await invoke("host.save", form));
+      setInvitation(undefined);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -217,6 +251,24 @@ function HostApp() {
                   Start when I sign in
                 </label>
               </div>
+              <label className="remote-field">
+                Remote endpoint
+                <input
+                  placeholder="wss://agentview.your-domain.com"
+                  value={form.remoteAddress || ""}
+                  onChange={(e) =>
+                    setForm({ ...form, remoteAddress: e.target.value })
+                  }
+                />
+                <small>
+                  Use your host’s secure tunnel address. Local connections stay
+                  direct.
+                  {status?.remoteStatus &&
+                  status.remoteStatus !== "Not configured"
+                    ? ` Tunnel: ${status.remoteStatus}.`
+                    : ""}
+                </small>
+              </label>
               <details className="host-advanced">
                 <summary>
                   Agent runtime{" "}
@@ -266,21 +318,61 @@ function HostApp() {
         )}
         <div className="host-section connection-section">
           <div className="section-heading">
-            <h3>Connect your workstation</h3>
-            <span className="pill">Private network</span>
+            <h3>Pair a device</h3>
+            <span className="pill">
+              <ShieldCheck size={12} /> Encrypted
+            </span>
           </div>
-          <p>Open AgentView on your other PC and paste this connection key.</p>
+          <p>
+            Each paired device has full access to this workspace. Give each
+            phone or computer its own invitation. Scan on Android or paste into
+            AgentView.
+          </p>
+          <div className="input-row">
+            <input
+              aria-label="Device name"
+              placeholder="Device name"
+              value={deviceName}
+              onChange={(e) => setDeviceName(e.target.value)}
+            />
+            <button
+              className="secondary"
+              disabled={!status?.running}
+              onClick={() => void invite()}
+            >
+              <Plus size={15} /> Pair device
+            </button>
+          </div>
+          {invitation && (
+            <div className="pairing-invitation">
+              {clock < invitation.expiresAt ? (
+                <>
+                  <img
+                    src={invitation.qr}
+                    alt="One-time device pairing QR code"
+                  />
+                  <p>
+                    Expires in{" "}
+                    {Math.ceil((invitation.expiresAt - clock) / 1000)} seconds ·
+                    One use
+                  </p>
+                </>
+              ) : (
+                <p>Invitation expired. Create a fresh one to pair.</p>
+              )}
+            </div>
+          )}
           <button
             className="copy-key"
-            disabled={!status?.running}
+            disabled={!invitation || clock >= invitation.expiresAt}
             onClick={() => {
-              void invoke("host.copy");
+              void invoke("clipboard.write", { text: invitation?.code });
               setCopied(true);
               setTimeout(() => setCopied(false), 2000);
             }}
           >
             {copied ? <Check size={17} /> : <Copy size={17} />}{" "}
-            {copied ? "Connection key copied" : "Copy connection key"}
+            {copied ? "Invitation copied" : "Copy invitation"}
             <ArrowUpRight size={16} />
           </button>
           <div className="host-addresses">
@@ -324,6 +416,38 @@ function HostApp() {
             </p>
           </div>
         </div>
+        <div className="host-section">
+          <div className="section-heading">
+            <h3>Paired devices</h3>
+            <span className="pill">{status?.devices?.length || 0}</span>
+          </div>
+          {!status?.devices?.length && (
+            <p>Your paired phones and computers will appear here.</p>
+          )}
+          {status?.devices?.map((device) => (
+            <div className="paired-device" key={device.id}>
+              <ShieldCheck size={17} />
+              <div>
+                <strong>{device.name}</strong>
+                <small>
+                  Paired {new Date(device.createdAt).toLocaleDateString()}
+                </small>
+              </div>
+              <button
+                className="secondary"
+                onClick={async () => {
+                  try {
+                    setStatus(await invoke("host.revoke", { id: device.id }));
+                  } catch (e: any) {
+                    setError(e.message);
+                  }
+                }}
+              >
+                Remove access
+              </button>
+            </div>
+          ))}
+        </div>
         <p className="host-footer">
           Closing this window keeps your host running in the tray.
           <br />
@@ -345,6 +469,7 @@ function Connect({
 }) {
   const [code, setCode] = useState("");
   const [address, setAddress] = useState("");
+  const [scanError, setScanError] = useState("");
   return (
     <div className="connect-page">
       <div className="connect-art">
@@ -377,7 +502,24 @@ function Connect({
             onConnect(code, address);
           }}
         >
-          <label>Connection key</label>
+          {mobile && (
+            <button
+              type="button"
+              className="scan-pairing secondary"
+              onClick={async () => {
+                try {
+                  const result = await invoke("connection.scan");
+                  setCode(result.value);
+                  onConnect(result.value, "");
+                } catch (e: any) {
+                  setScanError(e.message);
+                }
+              }}
+            >
+              <QrCode size={20} /> Scan pairing invitation
+            </button>
+          )}
+          <label>Pairing invitation</label>
           <textarea
             aria-label="Connection key"
             placeholder="Paste from AgentView Host"
@@ -408,7 +550,9 @@ function Connect({
               : "Connect to workspace"}
           </button>
         </form>
-        {message && <div className="inline-error">{message}</div>}
+        {(message || scanError) && (
+          <div className="inline-error">{message || scanError}</div>
+        )}
         <div className="connect-foot">
           <span className="status-dot" /> Files stay on your host. Ideas travel
           with you.
@@ -420,6 +564,9 @@ function Connect({
 function ClientApp() {
   const [snapshot, setSnapshot] = useState<Snapshot>();
   const [connection, setConnection] = useState("disconnected");
+  const [route, setRoute] = useState("local");
+  const [phoneView, setPhoneView] = useState<"chat" | "brain">("chat");
+  const [drawer, setDrawer] = useState(false);
   const [connectionError, setConnectionError] = useState("");
   const [selectedThread, setSelectedThread] = useState<string>();
   const [page, setPage] = useState<ChatPage>();
@@ -457,6 +604,8 @@ function ClientApp() {
       setLoading(true);
     }
     setChatOpen(true);
+    setPhoneView("chat");
+    setDrawer(false);
     try {
       const result: ChatPage = await invoke("thread.read", {
         id,
@@ -486,6 +635,7 @@ function ClientApp() {
     const onEvent = (event: AppEvent) => {
       if (event.type === "connection") {
         setConnection(event.state);
+        if (event.route) setRoute(event.route);
         setConnectionError(event.message || "");
       }
       if (event.type === "snapshot") {
@@ -586,6 +736,7 @@ function ClientApp() {
         if (result.snapshot) {
           setSnapshot(result.snapshot);
           setConnection("connected");
+          setRoute(result.route || "local");
         }
       })
       .catch((e) => setConnectionError(e.message));
@@ -615,6 +766,8 @@ function ClientApp() {
   const selectNote = async (note: Note) => {
     const generation = ++noteGeneration.current;
     setSelected(note);
+    setPhoneView("brain");
+    setDrawer(false);
     setBody("");
     setNoteLoading(true);
     try {
@@ -633,7 +786,21 @@ function ClientApp() {
     setPage(undefined);
     setLoading(false);
     setChatOpen(true);
+    setPhoneView("chat");
+    setDrawer(false);
   };
+  useEffect(() => {
+    const back = () => {
+      if (palette) setPalette(false);
+      else if (settingsOpen) setSettingsOpen(false);
+      else if (drawer) setDrawer(false);
+      else if (selected) setSelected(undefined);
+      else if (activityOpen) setActivityOpen(false);
+      else setPhoneView("chat");
+    };
+    window.addEventListener("agentview:back", back);
+    return () => window.removeEventListener("agentview:back", back);
+  }, [palette, settingsOpen, drawer, selected, activityOpen]);
   const connected = connection === "connected";
   const g = snapshot?.graph || emptyGraph;
   const currentThread =
@@ -667,7 +834,9 @@ function ClientApp() {
     });
   };
   return (
-    <div className="client-app">
+    <div
+      className={`client-app phone-${phoneView} ${drawer ? "drawer-open" : ""} ${mobile ? "native-mobile" : ""}`}
+    >
       <WindowBar />
       {!snapshot ? (
         <Connect
@@ -678,6 +847,23 @@ function ClientApp() {
       ) : (
         <>
           <header className="app-header">
+            <button
+              className="mobile-menu icon-button"
+              aria-label={
+                phoneView === "brain"
+                  ? "Back to conversation"
+                  : "Open conversations"
+              }
+              onClick={() =>
+                phoneView === "brain" ? setPhoneView("chat") : setDrawer(true)
+              }
+            >
+              {phoneView === "brain" ? (
+                <ArrowLeft size={21} />
+              ) : (
+                <Menu size={21} />
+              )}
+            </button>
             <div className="brand">
               <div className="brand-mark">
                 <Mark size={27} />
@@ -706,7 +892,9 @@ function ClientApp() {
               <span className={`connection-pill ${connected ? "" : "lost"}`}>
                 <Radio size={12} />
                 {connected
-                  ? "Host connected"
+                  ? route === "remote"
+                    ? "Remote"
+                    : "Local"
                   : connection === "reconnecting"
                     ? "Reconnecting"
                     : "Disconnected"}
@@ -716,12 +904,51 @@ function ClientApp() {
                 title="Connection settings"
                 onClick={() => setSettingsOpen(true)}
               >
-                AJ
+                <Settings2 size={17} />
               </button>
             </div>
           </header>
+          <button
+            className="mobile-live"
+            onClick={() => {
+              setPhoneView(phoneView === "brain" ? "chat" : "brain");
+              setActivityOpen(false);
+            }}
+          >
+            <span className={`status-dot ${connected ? "" : "offline"}`} />
+            <span>
+              {phoneView === "brain"
+                ? "Back to conversation"
+                : activeAgents.length
+                  ? `${activeAgents[0].name} · ${activeAgents[0].detail || activeAgents[0].action}`
+                  : "Your workspace, connected"}
+            </span>
+            <Network size={14} />
+            <small>{phoneView === "brain" ? "Chat" : "Open brain"}</small>
+            <ChevronRight size={14} />
+          </button>
+          {drawer && (
+            <button
+              className="drawer-scrim"
+              aria-label="Close conversations"
+              onClick={() => setDrawer(false)}
+            />
+          )}
           <div className={`workspace ${chatOpen ? "" : "chat-collapsed"}`}>
             <aside className="sidebar">
+              <div className="drawer-title">
+                <div>
+                  <span className="eyebrow">YOUR WORKSPACE</span>
+                  <h2>Conversations</h2>
+                </div>
+                <button
+                  className="icon-button"
+                  aria-label="Close conversations"
+                  onClick={() => setDrawer(false)}
+                >
+                  <X size={20} />
+                </button>
+              </div>
               <button className="new-chat" onClick={newChat}>
                 <Plus size={16} /> New conversation <span>↗</span>
               </button>
@@ -730,6 +957,8 @@ function ClientApp() {
                 onClick={() => {
                   setDomain(undefined);
                   setQuery("");
+                  setPhoneView("brain");
+                  setDrawer(false);
                 }}
               >
                 <Network size={16} />
@@ -738,7 +967,11 @@ function ClientApp() {
               </button>
               <button
                 className={`nav-item ${activityOpen ? "active-secondary" : ""}`}
-                onClick={() => setActivityOpen(!activityOpen)}
+                onClick={() => {
+                  setActivityOpen(!activityOpen);
+                  setPhoneView("brain");
+                  setDrawer(false);
+                }}
               >
                 <ActivityIcon size={16} />
                 <span>Activity</span>
@@ -872,7 +1105,12 @@ function ClientApp() {
               </div>
               <div className="sidebar-bottom">
                 <UsageLimits limits={snapshot.limits} connected={connected} />
-                <button onClick={() => setSettingsOpen(true)}>
+                <button
+                  onClick={() => {
+                    setSettingsOpen(true);
+                    setDrawer(false);
+                  }}
+                >
                   <Settings2 size={15} /> Workspace settings
                 </button>
                 <div className="host-mini">
@@ -903,6 +1141,13 @@ function ClientApp() {
                   <p>A little structure. A lot of possibility.</p>
                 </div>
                 <div className="brain-top-actions">
+                  <button
+                    className="icon-button"
+                    title="Live activity"
+                    onClick={() => setActivityOpen(!activityOpen)}
+                  >
+                    <ActivityIcon size={16} />
+                  </button>
                   <button
                     className="icon-button"
                     title="Graph settings"
@@ -1052,6 +1297,8 @@ function ClientApp() {
                     onClick={() => {
                       setAttachment(selected);
                       setChatOpen(true);
+                      setPhoneView("chat");
+                      setDrawer(false);
                       setSelected(undefined);
                     }}
                   >
@@ -1107,7 +1354,7 @@ function ClientApp() {
                 </div>
               )}
             </main>
-            {chatOpen && (
+            {(chatOpen || mobile) && (
               <Chat
                 onCleared={newChat}
                 thread={currentThread}
@@ -1211,8 +1458,9 @@ function ClientApp() {
               <Server size={18} />
             </div>
             <p className="settings-help">
-              Use the connection key from Host on the same private network. If
-              the host address changes, connect again with its updated key.
+              Local connections go directly to your paired host. Remote sessions
+              use its secure endpoint. Remove this device from Host to revoke
+              access.
             </p>
             <button
               className="secondary full-width"

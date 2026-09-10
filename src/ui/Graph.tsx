@@ -56,7 +56,7 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
     const fit = () => {
       const v = view.current;
       const ns = nodes.current;
-      if (!ns.length) return;
+      if (!ns.length || v.width <= 100 || v.height <= 75) return;
       const xs = ns.map((n) => n.x || 0),
         ys = ns.map((n) => n.y || 0);
       const minX = Math.min(...xs),
@@ -168,11 +168,14 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
       >();
       let orbHits: { id: string; x: number; y: number }[] = [];
       const resize = new ResizeObserver(([entry]) => {
+        if (entry.contentRect.width <= 0 || entry.contentRect.height <= 0)
+          return;
         const dpr = window.devicePixelRatio || 1;
         c.width = Math.round(entry.contentRect.width * dpr);
         c.height = Math.round(entry.contentRect.height * dpr);
         view.current.width = entry.contentRect.width;
         view.current.height = entry.contentRect.height;
+        fit();
       });
       resize.observe(c);
       const local = (e: PointerEvent) => {
@@ -192,8 +195,28 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
             Math.hypot((n.x || 0) - p.x, (n.y || 0) - p.y) <
             n.radius + 10 / view.current.scale,
         );
+      const pointers = new Map<number, { x: number; y: number }>();
+      let pinchDistance = 0;
+      const distance = () => {
+        const [a, b] = [...pointers.values()];
+        return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
+      };
       const pointerdown = (e: PointerEvent) => {
         const p = local(e);
+        pointers.set(e.pointerId, p);
+        c.setPointerCapture(e.pointerId);
+        if (pointers.size > 1) {
+          if (dragging) {
+            dragging.fx = null;
+            dragging.fy = null;
+            sim.current?.alphaTarget(0);
+          }
+          dragging = null;
+          pan = false;
+          moved = true;
+          pinchDistance = distance();
+          return;
+        }
         const orb = orbHits.find((a) => Math.hypot(a.x - p.x, a.y - p.y) < 20);
         if (orb) {
           latest.current.onAgent(orb.id);
@@ -213,6 +236,17 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
       };
       const pointermove = (e: PointerEvent) => {
         const p = local(e);
+        if (pointers.has(e.pointerId)) pointers.set(e.pointerId, p);
+        if (pointers.size > 1) {
+          const next = distance();
+          if (pinchDistance > 0)
+            view.current.targetScale = Math.max(
+              0.25,
+              Math.min(3.5, (view.current.targetScale * next) / pinchDistance),
+            );
+          pinchDistance = next;
+          return;
+        }
         const w = world(p);
         if (dragging || pan) {
           if (Math.hypot(p.x - down.x, p.y - down.y) > 2) moved = true;
@@ -244,7 +278,9 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
             : null,
         );
       };
-      const pointerup = () => {
+      const pointerup = (e: PointerEvent) => {
+        pointers.delete(e.pointerId);
+        if (e.type === "pointercancel") moved = true;
         if (dragging) {
           if (!moved) latest.current.onSelect(dragging);
           dragging.fx = null;

@@ -58,7 +58,10 @@ async function launch(role, port) {
 try {
   const host = await launch("host", 9437);
   await host.waitForFunction(
-    async () => (await window.agentview.invoke("host.status")).agentReady,
+    async () => {
+      const status = await window.agentview.invoke("host.status");
+      return status.agentReady && status.running && status.notes > 0;
+    },
     null,
     { timeout: 45_000 },
   );

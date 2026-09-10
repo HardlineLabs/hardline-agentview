@@ -14,6 +14,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { HostService, decodeConnection } from "../host/service";
+import { encodeConnection, remoteAddress } from "../shared/pairing";
 import { ClientConnection } from "./connection";
 import { enableNetworkAccess, networkAccessEnabled } from "./firewall";
 import type { HostSettings, AppEvent, HostStatus } from "../shared/types";
@@ -44,7 +45,15 @@ if (!app.requestSingleInstanceLock()) {
   let quitting = false;
   let cleaningUp = false;
   let changing = false;
-  const client = new ClientConnection();
+  const remember = async (config: import("../shared/types").Connection) => {
+    if (!safeStorage.isEncryptionAvailable())
+      throw new Error("Windows secure storage is unavailable.");
+    await fs.writeFile(
+      path.join(dataDir, "connection.bin"),
+      safeStorage.encryptString(encodeConnection(config)),
+    );
+  };
+  const client = new ClientConnection(remember);
   let settings: HostSettings = {
     vaultPath: path.join(os.homedir(), "Desktop", "hardline labs vault"),
     codexPath: "",
@@ -172,6 +181,10 @@ if (!app.requestSingleInstanceLock()) {
     "agentview:invoke",
     async (_event, method: string, params: any = {}) => {
       if (method === "app.info") return { role, version: app.getVersion() };
+      if (method === "clipboard.write") {
+        clipboard.writeText(String(params.text || ""));
+        return {};
+      }
       if (role === "host") {
         if (method === "host.networkStatus")
           return networkAccessEnabled(settings.port);
@@ -180,6 +193,12 @@ if (!app.requestSingleInstanceLock()) {
           return true;
         }
         if (method === "host.status") return hostStatus();
+        if (method === "host.invite")
+          return host?.createInvitation(String(params.name || "New device"));
+        if (method === "host.revoke") {
+          await host?.revokeDevice(String(params.id));
+          return hostStatus();
+        }
         if (method === "host.copy") {
           clipboard.writeText(hostStatus().pairingCode);
           return {};
@@ -212,6 +231,9 @@ if (!app.requestSingleInstanceLock()) {
             codexPath: String(params.codexPath || ""),
             port: params.port,
             autoStart: Boolean(params.autoStart),
+            remoteAddress: remoteAddress(String(params.remoteAddress || "")),
+            cloudflaredPath: settings.cloudflaredPath,
+            tunnelConfig: settings.tunnelConfig,
           };
           await fs.writeFile(
             path.join(dataDir, "settings.json"),
@@ -235,7 +257,11 @@ if (!app.requestSingleInstanceLock()) {
       }
       if (method === "connection.load") {
         if (client.connected && client.snapshot)
-          return { connected: true, snapshot: client.snapshot };
+          return {
+            connected: true,
+            snapshot: client.snapshot,
+            route: client.route,
+          };
         try {
           const encrypted = await fs.readFile(
             path.join(dataDir, "connection.bin"),
@@ -264,13 +290,8 @@ if (!app.requestSingleInstanceLock()) {
             throw new Error("Use a host address with wss://.");
         }
         client.connect(config);
-        if (safeStorage.isEncryptionAvailable()) {
-          const { encodeConnection } = await import("../host/service");
-          await fs.writeFile(
-            path.join(dataDir, "connection.bin"),
-            safeStorage.encryptString(encodeConnection(config)),
-          );
-        }
+        // Invitations are replaced by a device credential only after the host proves its identity.
+        if (config.kind === "device") await remember(config);
         return {};
       }
       if (method === "connection.disconnect") {

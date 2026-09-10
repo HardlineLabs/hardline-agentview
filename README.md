@@ -3,31 +3,41 @@
 A remote workspace for the creator. A live knowledge graph and agent conversations,
 with files and execution kept on the host computer.
 
-## On the host PC
+## Connect your workspace
 
-1. Open **AgentView Host.exe**. It finds the usual desktop vault automatically;
-   choose a different folder if needed.
-2. Check that the agent runtime is connected. The host uses your installed Codex
-   and its existing ChatGPT sign-in. Expand **Agent runtime** to choose an
-   executable if automatic detection cannot find it.
-3. Click **Allow LAN connections** and approve the Windows administrator prompt.
-   This enables only the host TCP port from the local subnet. It does not change
-   the Windows network profile. Repeat after changing the host port.
-4. Copy the **connection key**.
-5. Optionally enable **Start when I sign in**, then save.
+Open **AgentView Host.exe** on the Windows computer that owns your vault and agent
+runtime. Choose the vault, check the agent connection, and optionally enable
+start-at-sign-in. **Allow LAN connections** asks Windows to allow the configured
+port from the local subnet. Keep the host computer awake and signed in; closing
+its window leaves it in the tray.
 
-Closing the host window leaves it running in the system tray. Use the tray's
-**Quit host** to stop it. Keep the server laptop awake and signed in, including
-when its lid is closed.
+Choose **Pair device**, name the phone or computer, then scan the invitation on
+Android or paste it into **AgentView.exe**. Invitations expire in five minutes and
+work once. The host can remove a paired device's access at any time. Each paired
+device has full access to this workspace. Version 0.3 requires fresh pairing;
+connection keys from 0.2 no longer work.
 
-## On the workstation
+Local connections go directly to the host on TCP **43120** by default. For access
+from other networks, configure a dedicated Cloudflare Tunnel endpoint using the
+[remote setup guide](docs/remote-access.md). Clients automatically fall back to
+that endpoint when the paired LAN connection is unavailable. **Local**, **Remote**
+and reconnecting states show which connection is in use. Workspace messages are
+end-to-end encrypted through both paths. No router port forwarding is needed.
 
-1. Open **AgentView.exe** on the same private network.
-2. Paste the connection key and connect. The key is remembered on this PC.
+## On Android
 
-The default host port is TCP **43120**. No internet port forwarding is needed.
-If the host has several adapters, use **a different host address** on the client
-to select its LAN address. Guest Wi-Fi and device isolation can block the link.
+Install the signed APK from the private GitHub release. Chat fills the screen;
+open the drawer to switch conversations, filter projects, browse archived chats,
+see account limits or open settings. The small live activity strip opens the
+interactive brain. Drag notes, pinch to zoom, inspect activity, attach notes and
+return to chat without losing your draft. All commands still run on the host.
+The phone must run Android 7 or later with a current Android System WebView.
+
+Context usage, account limits, model/effort selection, approvals, steering and
+conversation controls are shared with the Windows client. See [Android build and
+validation](docs/android.md) for developer setup and signed releases.
+
+## On Windows
 
 Drag notes to play with the network, scroll to zoom, and double-click to fit.
 Select a note to read it or bring it into a conversation. **Ctrl+K** finds notes
