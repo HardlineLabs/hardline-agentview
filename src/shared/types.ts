@@ -166,6 +166,7 @@ export type Connection = {
   address: string;
   fingerprint: string;
   remoteAddress?: string;
+  routePreference?: "auto" | "local" | "remote";
 };
 export type PairedDevice = { id: string; name: string; createdAt: number };
 export type AppEvent = { type: string; [key: string]: any };

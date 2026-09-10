@@ -51,6 +51,11 @@ export function decodeConnection(code: string): Connection {
     )
       throw new Error();
     if (c.remoteAddress) remoteAddress(c.remoteAddress);
+    if (
+      c.routePreference &&
+      !["auto", "local", "remote"].includes(c.routePreference)
+    )
+      throw new Error();
     if (c.kind !== "invite" && c.kind !== "device") throw new Error();
     return c;
   } catch {

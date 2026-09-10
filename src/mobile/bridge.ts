@@ -114,6 +114,11 @@ export function mobileBridge(): DesktopBridge | undefined {
       }
       if (method === "connection.connect") {
         const config = decodeConnection(params.code);
+        config.routePreference = ["auto", "local", "remote"].includes(
+          params.routePreference,
+        )
+          ? params.routePreference
+          : "auto";
         if (params.address?.trim())
           config.address = remoteAddress(
             params.address.startsWith("wss://")

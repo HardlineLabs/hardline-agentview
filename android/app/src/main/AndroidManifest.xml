@@ -13,6 +13,10 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
 
+        <activity android:name=".PairingCaptureActivity"
+            android:screenOrientation="portrait" android:exported="false"
+            android:theme="@style/zxing_CaptureTheme" />
+
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
             android:name=".MainActivity"

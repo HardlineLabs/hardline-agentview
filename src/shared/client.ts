@@ -26,6 +26,7 @@ export class WorkspaceConnection {
   private generation = 0;
   private retry?: ReturnType<typeof setTimeout>;
   private watchdog?: ReturnType<typeof setTimeout>;
+  private connectionDeadline?: ReturnType<typeof setTimeout>;
   private attempts = 0;
   private remote = false;
   private secure?: SecureSession;
@@ -48,9 +49,31 @@ export class WorkspaceConnection {
   ) {}
   connect(config: Connection) {
     this.disconnect();
+    if (config.routePreference === "remote" && !config.remoteAddress) {
+      this.emit({
+        type: "connection",
+        state: "error",
+        message:
+          "This invitation has no remote endpoint. Configure Remote access in Host, then create a new invitation.",
+      });
+      return;
+    }
     this.config = { ...config };
-    this.remote = false;
+    this.remote = config.routePreference === "remote";
     this.attempts = 0;
+    this.connectionDeadline = setTimeout(() => {
+      this.disconnect();
+      this.emit({
+        type: "connection",
+        state: "error",
+        message:
+          config.routePreference === "local"
+            ? "Could not reach Host on the LAN. Use Remote when you are away from the host's network."
+            : config.remoteAddress
+              ? "Could not reach your workspace locally or remotely. Check that Host and its remote tunnel are running, then try a fresh invitation."
+              : "This invitation only works on the host's local network. For remote access, configure Remote access in Host and create a new invitation.",
+      });
+    }, 30_000);
     this.open();
   }
   private open() {
@@ -75,6 +98,7 @@ export class WorkspaceConnection {
     const fail = (message: string) => {
       if (!current()) return;
       this.config = undefined;
+      clearTimeout(this.connectionDeadline);
       this.emit({ type: "connection", state: "error", message });
       this.transport?.close();
     };
@@ -83,6 +107,9 @@ export class WorkspaceConnection {
     };
     const handlers: SocketHandlers = {
       open: () => {
+        if (!current()) return;
+        // The short LAN deadline only covers dialing, not encryption or secure storage.
+        this.armTimeout(20_000);
         incoming = incoming
           .then(async () => {
             keys = await ephemeral();
@@ -129,6 +156,7 @@ export class WorkspaceConnection {
             const event: AppEvent = await this.secure.decrypt(frame);
             if (!current()) return;
             if (event.type === "paired") {
+              this.armTimeout(20_000);
               const updated: Connection = {
                 ...config,
                 credentialId: event.credentialId,
@@ -149,6 +177,7 @@ export class WorkspaceConnection {
               return;
             }
             if (event.type === "snapshot") {
+              clearTimeout(this.connectionDeadline);
               authenticated = true;
               this.connected = true;
               this.attempts = 0;
@@ -183,12 +212,14 @@ export class WorkspaceConnection {
       },
       close: (code, reason) => {
         if (!current()) return;
+        this.transport = undefined;
         clearTimeout(this.watchdog);
         this.connected = false;
         this.rejectPending(
           "Connection interrupted. Check whether the action completed before retrying.",
         );
         if (code === 4003) {
+          clearTimeout(this.connectionDeadline);
           this.config = undefined;
           this.emit({
             type: "connection",
@@ -200,11 +231,18 @@ export class WorkspaceConnection {
         if (!this.config) return;
         // Every new connection cycle tries LAN first. A failed LAN attempt falls back once.
         this.remote =
-          !authenticated && !remote && Boolean(config.remoteAddress);
+          config.routePreference === "remote" ||
+          (config.routePreference !== "local" &&
+            !authenticated &&
+            !remote &&
+            Boolean(config.remoteAddress));
         this.emit({
           type: "connection",
           state: "reconnecting",
           route: this.route,
+          message: this.remote
+            ? "Local host unavailable. Trying the remote connection…"
+            : "Workspace unavailable. Retrying the connection…",
         });
         this.retry = setTimeout(
           () => this.open(),
@@ -248,7 +286,7 @@ export class WorkspaceConnection {
     });
   }
   resume() {
-    if (this.config && !this.connected) {
+    if (this.config && !this.connected && !this.transport && !this.retry) {
       const config = this.config;
       this.connect(config);
     }
@@ -264,6 +302,8 @@ export class WorkspaceConnection {
     ++this.generation;
     clearTimeout(this.retry);
     clearTimeout(this.watchdog);
+    clearTimeout(this.connectionDeadline);
+    this.retry = undefined;
     this.config = undefined;
     this.connected = false;
     this.snapshot = undefined;
