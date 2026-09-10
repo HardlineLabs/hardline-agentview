@@ -1,0 +1,50 @@
+{
+  "name": "hardline-agentview",
+  "version": "0.1.0",
+  "description": "A living workspace for human and agent collaboration",
+  "private": true,
+  "type": "module",
+  "main": "dist/electron/main.cjs",
+  "author": "Hardline Labs",
+  "license": "UNLICENSED",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && node scripts/build.mjs",
+    "test": "tsx --test tests/*.test.ts",
+    "check": "npm run test && npm run build",
+    "host": "electron . --role=host",
+    "client": "electron . --role=client",
+    "package": "npm run build && node scripts/package.mjs",
+    "smoke": "node scripts/smoke.mjs"
+  },
+  "dependencies": {
+    "@fontsource/dm-sans": "^5.3.0",
+    "@fontsource/manrope": "^5.3.0",
+    "chokidar": "^4.0.3",
+    "d3-force": "^3.0.0",
+    "gray-matter": "^4.0.3",
+    "lucide-react": "^0.468.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-markdown": "^10.0.0",
+    "remark-gfm": "^4.0.1",
+    "selfsigned": "^3.0.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/d3-force": "^3.0.10",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/ws": "^8.5.0",
+    "@vitejs/plugin-react": "^4.4.0",
+    "electron": "^40.0.0",
+    "electron-builder": "^26.0.0",
+    "esbuild": "^0.25.0",
+    "playwright": "^1.56.0",
+    "sharp": "^0.35.4",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0",
+    "vite": "^6.3.0"
+  }
+}
