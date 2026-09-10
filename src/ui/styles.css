@@ -260,6 +260,7 @@ kbd {
   color: #b8e6d4;
 }
 .brand strong {
+  white-space: nowrap;
   font-family: "Manrope", sans-serif;
   font-size: 19px;
   font-weight: 650;
@@ -2128,7 +2129,7 @@ kbd {
     padding-right: 10px;
   }
   .brand {
-    width: 143px;
+    width: 165px;
   }
   .header-workspace {
     display: none;
