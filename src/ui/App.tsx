@@ -28,6 +28,7 @@ import {
   PanelRightOpen,
 } from "lucide-react";
 import { BrainGraph, type GraphControls } from "./Graph";
+import { UsageLimits } from "./Usage";
 import { Chat, Markdown } from "./Chat";
 import {
   ago,
@@ -438,6 +439,9 @@ function ClientApp() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [palette, setPalette] = useState(false);
   const [filter, setFilter] = useState("");
+  const [projectFilter, setProjectFilter] = useState("");
+  const [sectionFilter, setSectionFilter] = useState("");
+  const [archived, setArchived] = useState(false);
   const [toast, setToast] = useState("");
   const graph = useRef<GraphControls>(null);
   const threadRef = useRef(selectedThread);
@@ -493,7 +497,44 @@ function ClientApp() {
           s ? { ...s, graph: event.graph, projects: event.projects } : s,
         );
       if (event.type === "threads")
-        setSnapshot((s) => (s ? { ...s, threads: event.threads } : s));
+        setSnapshot((s) =>
+          s
+            ? {
+                ...s,
+                threads: event.threads,
+                projects: event.projects || s.projects,
+                sections: event.sections || s.sections,
+              }
+            : s,
+        );
+      if (event.type === "limits")
+        setSnapshot((s) => (s ? { ...s, limits: event.limits } : s));
+      if (event.type === "usage") {
+        setSnapshot((s) =>
+          s
+            ? {
+                ...s,
+                threads: s.threads.map((t) =>
+                  t.id === event.threadId ? { ...t, usage: event.usage } : t,
+                ),
+              }
+            : s,
+        );
+        setPage((old) =>
+          old && old.thread.id === event.threadId
+            ? { ...old, thread: { ...old.thread, usage: event.usage } }
+            : old,
+        );
+      }
+      if (
+        event.type === "threadChanged" &&
+        event.threadId === threadRef.current
+      ) {
+        ++readGeneration.current;
+        setSelectedThread(undefined);
+        setPage(undefined);
+        setLoading(false);
+      }
       if (event.type === "agents")
         setSnapshot((s) => (s ? { ...s, agents: event.agents } : s));
       if (event.type === "activity")
@@ -598,9 +639,25 @@ function ClientApp() {
   const currentThread =
     page?.thread || snapshot?.threads.find((t) => t.id === selectedThread);
   const domains = [...new Set(g.nodes.map((n) => n.domain))];
-  const threads = (snapshot?.threads || []).filter((t) =>
-    `${t.name || ""} ${t.preview}`.toLowerCase().includes(filter.toLowerCase()),
+  const threads = (snapshot?.threads || []).filter(
+    (t) =>
+      Boolean(t.archived) === archived &&
+      (!projectFilter || t.projectId === projectFilter) &&
+      (!sectionFilter || t.section?.id === sectionFilter) &&
+      `${t.name || ""} ${t.preview} ${t.cwd}`
+        .toLowerCase()
+        .includes(filter.toLowerCase()),
   );
+  const sections = [
+    ...new Map(
+      [
+        ...(snapshot?.sections || []),
+        ...(snapshot?.threads || []).flatMap((t) =>
+          t.section ? [t.section] : [],
+        ),
+      ].map((s) => [s.id, s]),
+    ).values(),
+  ];
   const activeAgents = snapshot?.agents.filter((a) => a.active) || [];
   const connect = (code: string, address: string) => {
     setConnectionError("");
@@ -703,6 +760,7 @@ function ClientApp() {
                       );
                       setDomain(match);
                       setFilter("");
+                      setProjectFilter(p.id);
                     }}
                   >
                     <Folder size={14} />
@@ -722,6 +780,55 @@ function ClientApp() {
                   <Search size={12} />
                 </button>
               </div>
+              <div className="conversation-filters">
+                <input
+                  aria-label="Search conversations"
+                  placeholder="Search chats…"
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value)}
+                />
+                <select
+                  aria-label="Filter by project"
+                  value={projectFilter}
+                  onChange={(e) => setProjectFilter(e.target.value)}
+                >
+                  <option value="">All projects</option>
+                  {snapshot.projects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+                {!!sections.length && (
+                  <select
+                    aria-label="Filter by category"
+                    value={sectionFilter}
+                    onChange={(e) => setSectionFilter(e.target.value)}
+                  >
+                    <option value="">All categories</option>
+                    {sections.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <div className="archive-tabs">
+                  <button
+                    className={!archived ? "selected" : ""}
+                    onClick={() => setArchived(false)}
+                  >
+                    Chats
+                  </button>
+                  <button
+                    className={archived ? "selected" : ""}
+                    onClick={() => setArchived(true)}
+                  >
+                    Archived
+                  </button>
+                  <small>{threads.length}</small>
+                </div>
+              </div>
               <div className="thread-list">
                 {threads.map((t) => (
                   <button
@@ -739,6 +846,15 @@ function ClientApp() {
                       <small>
                         {t.owned ? "AgentView" : "Desktop"} ·{" "}
                         {ago(t.updatedAt * 1000)}
+                        {t.projectId && (
+                          <>
+                            {" "}
+                            ·{" "}
+                            {snapshot.projects.find((p) => p.id === t.projectId)
+                              ?.name || "Project"}
+                          </>
+                        )}
+                        {t.section && <> · {t.section.name}</>}
                       </small>
                     </div>
                     {t.status.type === "active" && (
@@ -755,6 +871,7 @@ function ClientApp() {
                 )}
               </div>
               <div className="sidebar-bottom">
+                <UsageLimits limits={snapshot.limits} connected={connected} />
                 <button onClick={() => setSettingsOpen(true)}>
                   <Settings2 size={15} /> Workspace settings
                 </button>
@@ -992,6 +1109,7 @@ function ClientApp() {
             </main>
             {chatOpen && (
               <Chat
+                onCleared={newChat}
                 thread={currentThread}
                 page={page}
                 loading={loading}

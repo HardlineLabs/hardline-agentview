@@ -2,7 +2,25 @@ import { EventEmitter } from "node:events";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import chokidar from "chokidar";
-import type { Thread } from "../shared/types";
+import type { Thread, TokenUsage } from "../shared/types";
+
+export function observeUsage(record: any): TokenUsage | undefined {
+  if (record.type !== "event_msg" || record.payload?.type !== "token_count")
+    return;
+  const info = record.payload.info;
+  if (
+    !Number.isFinite(info?.last_token_usage?.total_tokens) ||
+    !Number.isFinite(info?.total_token_usage?.total_tokens)
+  )
+    return;
+  return {
+    total: { totalTokens: info.total_token_usage.total_tokens },
+    last: { totalTokens: info.last_token_usage.total_tokens },
+    modelContextWindow: Number.isFinite(info.model_context_window)
+      ? info.model_context_window
+      : null,
+  };
+}
 
 export type ObservedAction = {
   threadId: string;
@@ -67,12 +85,23 @@ export class SessionObserver extends EventEmitter {
     this.watcher.on("error", (error) => this.emit("diagnostic", String(error)));
   }
   async track(threads: Thread[]) {
-    const root = path.resolve(this.codexHome, "sessions") + path.sep;
+    const roots = ["sessions", "archived_sessions"].map((dir) =>
+      (path.resolve(this.codexHome, dir) + path.sep).toLowerCase(),
+    );
+    const retained = new Set(
+      threads.filter((t) => t.path).map((t) => path.resolve(t.path!)),
+    );
+    for (const file of this.sessions.keys()) {
+      if (!retained.has(file)) {
+        this.sessions.delete(file);
+        await this.watcher.unwatch(file);
+      }
+    }
     for (const thread of threads) {
       if (!thread.path) continue;
       const file = path.resolve(thread.path);
       if (
-        !file.toLowerCase().startsWith(root.toLowerCase()) ||
+        !roots.some((root) => file.toLowerCase().startsWith(root)) ||
         path.extname(file) !== ".jsonl"
       )
         continue;
@@ -122,6 +151,10 @@ export class SessionObserver extends EventEmitter {
         for (const line of lines) {
           try {
             const record = JSON.parse(line);
+            const usage = observeUsage(record);
+            if (usage)
+              this.emit("usage", { threadId: session.thread.id, usage });
+            if (session.thread.archived) continue;
             if (initial && Date.now() - Date.parse(record.timestamp) > 45_000)
               continue;
             const event = observeRecord(record);

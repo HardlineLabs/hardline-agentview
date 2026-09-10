@@ -72,6 +72,8 @@ try {
   await cw.getByLabel("Host address").fill("127.0.0.1:43121");
   await cw.getByRole("button", { name: "Connect to workspace" }).click();
   await cw.getByText("Your living brain.").waitFor({ timeout: 20_000 });
+  await cw.getByLabel("Filter by project").waitFor();
+  await cw.getByLabel("Filter by category").waitFor();
   await cw.waitForTimeout(1800);
   await cw.screenshot({ path: path.join(dir, "client.png") });
   await cw.getByRole("button", { name: "Find anything" }).click();
@@ -87,6 +89,21 @@ try {
     await cw.waitForSelector(".turn", { timeout: 20_000 });
   }
   await cw.screenshot({ path: path.join(dir, "conversation.png") });
+  await cw.locator(".context-usage").waitFor();
+  await cw.locator(".usage-limits summary").click();
+  await cw.locator(".limit-window").first().waitFor({ timeout: 20_000 });
+  await cw.screenshot({ path: path.join(dir, "usage.png") });
+  await cw.locator(".usage-limits summary").click();
+  const density = await cw.evaluate(() => {
+    const canvas = document.querySelector("canvas");
+    return {
+      width: canvas.width,
+      expected: Math.round(
+        canvas.getBoundingClientRect().width * devicePixelRatio,
+      ),
+    };
+  });
+  assert.equal(density.width, density.expected);
   await client.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()[0].setSize(1100, 760),
   );
@@ -113,7 +130,7 @@ try {
     await cw
       .getByLabel("Message your agent")
       .fill(
-        "This is a read-only AgentView connection check. Use a tool to read Home.md in the current vault, then reply with AGENTVIEW_CONNECTED and one short sentence describing the vault. Do not modify files, run checks, or spawn subagents.",
+        "This is a read-only AgentView connection check. First run a shell command that waits 12 seconds (Start-Sleep -Seconds 12 in PowerShell), so the client can test steering while you work. Then use a tool to read Home.md in the current vault, and reply with AGENTVIEW_CONNECTED and one short sentence. Do not modify files, run checks, or spawn subagents.",
       );
     await cw.getByRole("button", { name: "Send message", exact: true }).click();
     await cw.waitForFunction(
@@ -125,6 +142,26 @@ try {
       { timeout: 90_000 },
     );
     await cw.screenshot({ path: path.join(dir, "agent-active.png") });
+    await cw.waitForFunction(
+      () =>
+        window.__agentviewEvents.some(
+          (e) =>
+            e.method === "item/started" &&
+            e.params.item.type === "commandExecution",
+        ),
+      null,
+      { timeout: 90_000 },
+    );
+    await cw
+      .getByLabel("Message your agent")
+      .fill(
+        "Additional direction from the client: include AGENTVIEW_STEERED in your final reply to confirm that this mid-work message reached you.",
+      );
+    await cw.getByRole("button", { name: "Steer agent", exact: true }).click();
+    await cw
+      .getByText("Steering message accepted by the active agent.")
+      .waitFor();
+    await cw.screenshot({ path: path.join(dir, "agent-steering.png") });
     await cw.waitForFunction(
       () => window.__agentviewEvents.some((e) => e.method === "turn/completed"),
       null,
@@ -144,9 +181,67 @@ try {
       .locator(".agent-message")
       .filter({ hasText: "AGENTVIEW_CONNECTED" })
       .waitFor({ timeout: 20_000 });
+    await cw
+      .locator(".agent-message")
+      .filter({ hasText: "AGENTVIEW_STEERED" })
+      .waitFor({ timeout: 20_000 });
     await cw.screenshot({ path: path.join(dir, "agent-complete.png") });
+    const testId = result.params.threadId;
+    const testThread = await cw.evaluate(
+      async (id) =>
+        (await window.agentview.invoke("snapshot")).threads.find(
+          (t) => t.id === id,
+        ),
+      testId,
+    );
+    assert.ok(
+      testThread?.owned,
+      "Only clear the AgentView test conversation created in this run",
+    );
+    const openTestThread = async () => {
+      const title =
+        testThread.name ||
+        testThread.preview.slice(0, 48) ||
+        "Untitled conversation";
+      await cw.locator(".thread").filter({ hasText: title }).first().click();
+      await cw.locator(".turn").first().waitFor();
+    };
+    await cw.getByRole("button", { name: "Archive", exact: true }).click();
+    await cw
+      .getByRole("button", { name: "Archive conversation", exact: true })
+      .click();
+    await cw.waitForFunction(
+      async (id) =>
+        (await window.agentview.invoke("snapshot")).threads.find(
+          (t) => t.id === id,
+        )?.archived,
+      testId,
+    );
+    await cw.getByRole("button", { name: "Archived", exact: true }).click();
+    await openTestThread();
+    await cw.getByRole("button", { name: "Restore", exact: true }).click();
+    await cw.waitForFunction(
+      async (id) =>
+        (await window.agentview.invoke("snapshot")).threads.find(
+          (t) => t.id === id,
+        )?.archived === false,
+      testId,
+    );
+    await cw.getByRole("button", { name: "Chats", exact: true }).click();
+    await openTestThread();
+    await cw.getByRole("button", { name: "Delete", exact: true }).click();
+    await cw
+      .getByRole("button", { name: "Delete permanently", exact: true })
+      .click();
+    await cw.waitForFunction(
+      async (id) =>
+        !(await window.agentview.invoke("snapshot")).threads.some(
+          (t) => t.id === id,
+        ),
+      testId,
+    );
     console.log(
-      "Live agent turn passed: UI send, tool execution, activity orbs, streamed response.",
+      "Live agent turn passed: UI send, mid-work steering, tool activity, context usage, archive, restore and permanent deletion of the test conversation.",
     );
   }
   await cw
