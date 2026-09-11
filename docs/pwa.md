@@ -12,7 +12,7 @@ repositories, agent sign-in and execution. There is no shared hosted agent accou
    **Open as Web App** enabled if shown, and tap **Add**.
 3. Open AgentView from its new icon before pairing. Browser tabs and installed apps
    may have separate storage on iOS.
-4. On your computer, run AgentView Host 0.3.1 or later, select your vault and
+4. On your computer, run AgentView Host 0.4 or later for all controls, select your vault and
    configure [Remote access](remote-access.md). Choose **Pair device**.
 5. In the PWA, scan the invitation or paste it and choose **Connect to workspace**.
    Camera frames are decoded on the phone and never uploaded.
@@ -36,14 +36,45 @@ Saved pairing is encrypted in IndexedDB with a non-exportable Web Crypto key.
 This is browser-origin protection, not Android Keystore or an iOS Keychain promise:
 code running on the app's origin can use that key. Use a trusted device. Clearing
 website data removes pairing; create a fresh invitation afterward. **Disconnect &
-change host** clears this browser's saved pairing and in-memory drafts. Remove the
+change host** clears this browser's saved pairing, drafts, attachment previews and
+outgoing receipts. Remove the
 old device from Host as well if you want to revoke its credential.
 
 Workspace snapshots and conversations are not saved in the service-worker cache.
 Only the app shell, fonts and icons are cached. An offline shell cannot read live
 workspace content or run an agent. Returning to the app reconnects and refreshes
 the workspace; running work continues on the computer while the phone is away.
-Background push notifications are not included.
+Text drafts, uploaded attachment references/previews, outgoing action receipts and
+the selected chat are saved in encrypted IndexedDB, bound to the paired host.
+Ordinary reloads restore them. Browser storage can still be cleared or evicted.
+
+## Workspace controls
+
+With Host 0.4, **Workspace settings → Host** saves the default permission mode,
+checks actual runtime capabilities and provides reconnection controls. See
+[host operation](host-operation.md) for Full Access and Windows elevation.
+**Onboarding** saves your default instructions. **Onboard agent** appears only in
+an empty conversation and sends those instructions using the selected workspace
+and model; sending the first message removes it.
+
+Use **Rename** in a conversation or **Select conversations** in the drawer to
+archive, restore or permanently delete several chats. Active chats are protected;
+partial failures retain the failed selection. Terminal and Agent workspace nodes
+now live in the brain's coordinates and move with the graph as you drag.
+
+Attach images or files from the composer. Images are converted on the device to
+JPEG with a longest edge of 2,048 pixels; unsupported image decoding reports an
+error. Up to eight attachments of 6 MiB each are uploaded over the paired encrypted
+connection. Attachment previews and text survive reload. **Files** browses known
+workspaces with text/image previews and downloads. **Queue** lists follow-ups sent
+with the composer's queue option while an agent works.
+
+**Inbox → Enable notifications** asks for browser permission. On iPhone this needs
+the installed Home Screen app with Web Push support. The Host sends generic
+completion/input notices through the browser's push provider; message content and
+workspace files are omitted. Tapping a notification opens its conversation.
+The PC and network Host must be online. Delivery is best effort; inbox/history
+remain available without push. **Disable notifications** removes this subscription.
 
 ## Updates
 
@@ -51,7 +82,7 @@ The app checks for updates when opened, returned to the foreground, brought onli
 and periodically while visible. **Update & reload** first saves an encrypted,
 short-lived copy of the current text drafts and selected conversation, then loads
 the complete new build. Restoration is bound to the paired host, consumed once,
-and expires after ten minutes. Ordinary reloads do not persist drafts. Finish a
+and expires after ten minutes. The durable draft store also handles ordinary reloads. Finish a
 pending request before updating. UI-only releases need no host update; changes to
 host capabilities still require a compatible host release.
 

@@ -118,6 +118,11 @@ export type Approval = {
   params: Record<string, any>;
 };
 export type Snapshot = {
+  capabilities?: { apiVersion: number; hostVersion: string };
+  preferences?: {
+    defaultPermissions: "full" | "workspace" | "read-only";
+    onboarding: string;
+  };
   graph: Graph;
   threads: Thread[];
   projects: Project[];

@@ -42,8 +42,15 @@ validation](docs/android.md) for developer setup and signed releases.
 Open the AgentView PWA in Safari and add it to your Home Screen. Open its new icon,
 then scan a fresh invitation from your own Host with Remote access configured.
 The web app shares the Android interface and uses the existing encrypted protocol;
-Host 0.3.1 is compatible. UI updates arrive through the web app without reinstalling.
+Host 0.4 enables saved Full Access defaults, onboarding, renamed chats, bulk
+archive/delete, image/file attachments, durable drafts, files, queued follow-ups
+and optional completion notifications. Older hosts retain the basic client.
+UI updates arrive through the web app without reinstalling.
 See [web installation, updates and validation](docs/pwa.md).
+
+Use [host operation](docs/host-operation.md) for managed updates, optional Windows
+administrator startup and conversation recovery. [Host API](docs/api.md) describes
+the capability contract for future client interfaces.
 
 ## On Windows
 

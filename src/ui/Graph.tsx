@@ -15,7 +15,7 @@ import {
   type SimulationNodeDatum,
 } from "d3-force";
 import type { Graph as GraphData, Note, Agent } from "../shared/types";
-import { colors } from "./api";
+import { colors, browser } from "./api";
 import { moveToward } from "./motion";
 
 type Node = Note &
@@ -59,6 +59,10 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
       if (!ns.length || v.width <= 100 || v.height <= 75) return;
       const xs = ns.map((n) => n.x || 0),
         ys = ns.map((n) => n.y || 0);
+      if (browser) {
+        xs.push(-370, 370);
+        ys.push(330);
+      }
       const minX = Math.min(...xs),
         maxX = Math.max(...xs),
         minY = Math.min(...ys),
@@ -488,7 +492,15 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
             y: v.height - 58,
             color: "#b3ffe1",
           },
-        ].map((station) => ({ ...station, ...world(station) }));
+        ].map((station, i) =>
+          browser
+            ? {
+                ...station,
+                x: (i ? 330 : -330) + Math.sin(t / 15 + i) * 18,
+                y: 280 + Math.cos(t / 18 + i) * 12,
+              }
+            : { ...station, ...world(station) },
+        );
         const stationFor = (a: Agent) =>
           stations[a.action === "running" ? 0 : 1];
         for (const station of stations) {

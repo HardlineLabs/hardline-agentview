@@ -79,7 +79,7 @@ function key() {
   }));
 }
 export async function savePrivate(
-  name: "connection" | "resume",
+  name: "connection" | "resume" | "drafts",
   value: unknown,
 ) {
   const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -91,7 +91,7 @@ export async function savePrivate(
   await write(name, { iv, data });
 }
 export async function loadPrivate<T>(
-  name: "connection" | "resume",
+  name: "connection" | "resume" | "drafts",
 ): Promise<T | undefined> {
   const sealed = await read<Sealed>(name);
   if (!sealed) return;
@@ -113,4 +113,5 @@ export async function loadPrivate<T>(
     );
   }
 }
-export const removePrivate = (name: "connection" | "resume") => write(name);
+export const removePrivate = (name: "connection" | "resume" | "drafts") =>
+  write(name);

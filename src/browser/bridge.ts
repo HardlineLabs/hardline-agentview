@@ -8,6 +8,39 @@ import type { AppEvent, Connection, DesktopBridge } from "../shared/types";
 import { loadPrivate, removePrivate, savePrivate } from "./storage";
 
 export const browserDrafts = new Map<string, string>();
+export type Attachment = {
+  id: string;
+  name: string;
+  mime: string;
+  size: number;
+  preview?: string;
+};
+export const browserAttachments = new Map<string, Attachment[]>();
+export const browserOutbox = new Map<
+  string,
+  {
+    method: string;
+    threadId?: string;
+    state: string;
+    result?: any;
+    error?: string;
+  }
+>();
+let selectedDraft: string | undefined;
+let saving = Promise.resolve();
+export function saveDrafts(selectedThread?: string) {
+  if (selectedThread !== undefined) selectedDraft = selectedThread;
+  if (!paired) return Promise.resolve();
+  const value = {
+    hostId: paired.hostId,
+    drafts: [...browserDrafts],
+    attachments: [...browserAttachments],
+    outbox: [...browserOutbox],
+    selectedThread: selectedDraft,
+  };
+  saving = saving.catch(() => {}).then(() => savePrivate("drafts", value));
+  return saving;
+}
 let paired: Connection | undefined;
 let inFlight = 0;
 export async function prepareUpdate(selectedThread?: string) {
@@ -20,6 +53,7 @@ export async function prepareUpdate(selectedThread?: string) {
     drafts: [...browserDrafts],
     savedAt: Date.now(),
   });
+  await saveDrafts(selectedThread);
 }
 type Resume = {
   hostId: string;
@@ -30,6 +64,8 @@ type Resume = {
 export function browserBridge(): DesktopBridge {
   const listeners = new Set<(event: AppEvent) => void>();
   const emit = (event: AppEvent) => {
+    if (event.type === "snapshot" && event.snapshot?.capabilities?.apiVersion)
+      void reconcile();
     if (
       event.type === "connection" &&
       event.state === "error" &&
@@ -63,6 +99,28 @@ export function browserBridge(): DesktopBridge {
     await savePrivate("connection", encodeConnection(config));
     paired = config;
   });
+  async function reconcile() {
+    for (const [requestId, outgoing] of browserOutbox) {
+      if (!["pending", "uncertain"].includes(outgoing.state)) continue;
+      try {
+        const receipt = await client.request("request.status", { requestId });
+        outgoing.state =
+          receipt.state === "missing" ? "uncertain" : receipt.state;
+        outgoing.result = receipt.result;
+        outgoing.error = receipt.error;
+        if (receipt.state === "accepted")
+          emit({
+            type: "requestRecovered",
+            requestId,
+            method: outgoing.method,
+            result: receipt.result,
+          });
+      } catch {
+        /* Remain uncertain until the host is reachable. */
+      }
+    }
+    await saveDrafts().catch(() => {});
+  }
   let loading: Promise<unknown> | undefined;
   let generation = 0;
   let suspended = false;
@@ -114,6 +172,17 @@ export function browserBridge(): DesktopBridge {
           paired = decodeConnection(saved);
           paired.routePreference = "remote";
           let selectedThread;
+          const durable = await loadPrivate<any>("drafts");
+          if (durable?.hostId === paired.hostId) {
+            for (const [id, text] of durable.drafts || [])
+              browserDrafts.set(id, text);
+            for (const [id, attachments] of durable.attachments || [])
+              browserAttachments.set(id, attachments);
+            for (const [id, outgoing] of durable.outbox || [])
+              browserOutbox.set(id, outgoing);
+            selectedThread = durable.selectedThread;
+            selectedDraft = selectedThread;
+          }
           if (
             restore?.hostId === paired.hostId &&
             Date.now() - restore.savedAt < 10 * 60_000
@@ -142,9 +211,16 @@ export function browserBridge(): DesktopBridge {
             "Enable Remote access in AgentView Host, then create a new pairing invitation. The web app needs a secure remote endpoint.",
           );
         ++generation;
+        paired = undefined;
+        selectedDraft = undefined;
+        client.disconnect();
+        await saving.catch(() => {});
         await removePrivate("resume");
         await removePrivate("connection");
         browserDrafts.clear();
+        browserAttachments.clear();
+        browserOutbox.clear();
+        await removePrivate("drafts");
         paired = undefined;
         suspended = false;
         client.connect(config);
@@ -152,11 +228,16 @@ export function browserBridge(): DesktopBridge {
       }
       if (method === "connection.disconnect") {
         ++generation;
+        selectedDraft = undefined;
         paired = undefined;
         suspended = false;
         loading = undefined;
         client.disconnect();
         browserDrafts.clear();
+        browserAttachments.clear();
+        browserOutbox.clear();
+        await saving.catch(() => {});
+        await removePrivate("drafts");
         await removePrivate("connection");
         await removePrivate("resume");
         emit({ type: "connection", state: "disconnected" });
@@ -168,6 +249,46 @@ export function browserBridge(): DesktopBridge {
       }
       inFlight++;
       try {
+        if (
+          client.snapshot?.capabilities?.apiVersion &&
+          [
+            "thread.create",
+            "thread.send",
+            "thread.steer",
+            "thread.rename",
+            "thread.bulk",
+            "queue.add",
+          ].includes(method)
+        ) {
+          const requestId = crypto.randomUUID();
+          const outgoing = {
+            method,
+            threadId: params.id,
+            state: "pending",
+            result: undefined as any,
+            error: undefined as string | undefined,
+          };
+          browserOutbox.set(requestId, outgoing);
+          if (browserOutbox.size > 50)
+            browserOutbox.delete(browserOutbox.keys().next().value!);
+          await saveDrafts();
+          try {
+            const result = await client.request("request.execute", {
+              requestId,
+              method,
+              params,
+            });
+            outgoing.state = "accepted";
+            outgoing.result = result;
+            return result;
+          } catch (e: any) {
+            outgoing.state = "uncertain";
+            outgoing.error = e.message;
+            throw e;
+          } finally {
+            await saveDrafts().catch(() => {});
+          }
+        }
         return await client.request(method, params);
       } finally {
         inFlight--;

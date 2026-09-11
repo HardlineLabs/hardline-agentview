@@ -1,5 +1,7 @@
 import { PwaControls } from "../browser/PwaControls";
 import { Scanner } from "../browser/Scanner";
+import { WorkspaceTools, BulkChats } from "../browser/WorkspaceTools";
+import { saveDrafts } from "../browser/bridge";
 import { useEffect, useRef, useState } from "react";
 import {
   Activity as ActivityIcon,
@@ -669,6 +671,9 @@ function ClientApp() {
   const [toast, setToast] = useState("");
   const graph = useRef<GraphControls>(null);
   const threadRef = useRef(selectedThread);
+  useEffect(() => {
+    if (browser) void saveDrafts(selectedThread).catch(() => {});
+  }, [selectedThread]);
   threadRef.current = selectedThread;
   const readGeneration = useRef(0);
   const noteGeneration = useRef(0);
@@ -717,8 +722,22 @@ function ClientApp() {
       }
       if (event.type === "snapshot") {
         setSnapshot(event.snapshot);
+        const linkedThread = browser
+          ? new URLSearchParams(location.hash.slice(1)).get("thread")
+          : null;
+        if (linkedThread) {
+          history.replaceState(null, "", location.pathname);
+          void readThread(linkedThread);
+        }
         if (threadRef.current) void readThread(threadRef.current);
       }
+      if (event.type === "preferences")
+        setSnapshot((s) => (s ? { ...s, preferences: event.preferences } : s));
+      if (event.type === "requestRecovered")
+        notify(
+          "An earlier action was accepted by the host. Check Inbox for its conversation.",
+        );
+      if (event.type === "notice") notify(event.notice.title);
       if (event.type === "graph")
         setSnapshot((s) =>
           s ? { ...s, graph: event.graph, projects: event.projects } : s,
@@ -1157,6 +1176,13 @@ function ClientApp() {
                 </div>
               </div>
               <div className="thread-list">
+                {browser && snapshot.capabilities && (
+                  <BulkChats
+                    threads={threads}
+                    onError={notify}
+                    onDone={newChat}
+                  />
+                )}
                 {threads.map((t) => (
                   <button
                     className={`thread ${selectedThread === t.id ? "selected" : ""}`}
@@ -1450,6 +1476,8 @@ function ClientApp() {
             </main>
             {(chatOpen || mobile) && (
               <Chat
+                expanded={browser && Boolean(snapshot.capabilities)}
+                onboarding={snapshot.preferences?.onboarding}
                 onCleared={newChat}
                 thread={currentThread}
                 page={page}
@@ -1531,6 +1559,16 @@ function ClientApp() {
                 onChange={(e) => setMotion(e.target.checked)}
               />
             </label>
+            {browser && snapshot?.capabilities && (
+              <WorkspaceTools
+                projects={snapshot.projects}
+                onError={notify}
+                onThread={(id) => {
+                  setSettingsOpen(false);
+                  void readThread(id);
+                }}
+              />
+            )}
             <label className="setting-row">
               <div>
                 <strong>Note labels</strong>

@@ -39,6 +39,10 @@ import { encodeConnection } from "../shared/pairing";
 import { Devices } from "./devices";
 import { HostTunnel } from "./tunnel";
 import { SecurePeer } from "./secure-peer";
+import { HostFeatures } from "./features";
+import { threadPolicy, turnPolicy } from "./permissions";
+import { saveState } from "./state";
+import { version } from "../../package.json";
 
 export function visibleItems(items: ChatItem[]) {
   return items.filter((i) => !["reasoning", "hookPrompt"].includes(i.type));
@@ -76,6 +80,9 @@ export function describeAction(item: any): {
 }
 
 export class HostService extends EventEmitter {
+  features: HostFeatures;
+  private threadLocks = new Set<string>();
+  private connecting = false;
   vault: Vault;
   codex = new Codex();
   private server?: https.Server;
@@ -95,6 +102,7 @@ export class HostService extends EventEmitter {
   private owned = new Set<string>();
   private loaded = new Set<string>();
   private activeTurns = new Map<string, string>();
+  private completedTurns = new Set<string>();
   private liveThreads = new Map<string, Thread>();
   private liveTurns = new Map<string, Turn[]>();
   private observer?: SessionObserver;
@@ -117,6 +125,15 @@ export class HostService extends EventEmitter {
     private dataDir: string,
   ) {
     super();
+    this.features = new HostFeatures(
+      dataDir,
+      this.codex,
+      () => this.allProjects(),
+      (method, params) => this.handle(method, params),
+      (event) => this.broadcast(event),
+      (id) => this.activeTurns.has(id) || Boolean(this.agents.get(id)?.active),
+      () => this.reconnectAgent(),
+    );
     this.devices = new Devices(dataDir);
     this.tunnel.on("status", () => this.emit("status"));
     this.vault = new Vault(settings.vaultPath);
@@ -144,6 +161,9 @@ export class HostService extends EventEmitter {
           detail: "Waiting for your response",
         });
       this.approvals.set(request.id, request);
+      void this.features
+        .notice("Agent needs your input", request.params?.threadId)
+        .catch(() => {});
       this.broadcast({
         type: "approvals",
         approvals: [...this.approvals.values()],
@@ -160,6 +180,7 @@ export class HostService extends EventEmitter {
   }
   async start() {
     await fs.mkdir(this.dataDir, { recursive: true });
+    await this.features.load();
     const certPath = path.join(this.dataDir, "host-identity.json");
     let identity: { private: string; cert: string; token: string };
     try {
@@ -221,7 +242,7 @@ export class HostService extends EventEmitter {
     );
     const wss = new WebSocketServer({
       server: this.server,
-      maxPayload: 1_048_576,
+      maxPayload: 16 * 1024 * 1024,
     });
     this.webSockets = wss;
     wss.on("connection", (rawSocket) => {
@@ -309,7 +330,11 @@ export class HostService extends EventEmitter {
             if (this.commands.size > 500)
               this.commands.delete(this.commands.keys().next().value!);
           } else
-            result = await this.handle(request.method, request.params || {});
+            result = await this.handle(
+              request.method,
+              request.params || {},
+              socket.deviceId,
+            );
           socket.send(
             JSON.stringify({ type: "response", id: request.id, result }),
           );
@@ -351,8 +376,21 @@ export class HostService extends EventEmitter {
     this.emit("status");
   }
   async connectAgent() {
+    if (this.connecting) return;
+    this.connecting = true;
     try {
-      await this.codex.start(await findCodex(this.settings.codexPath));
+      await this.codex.start(
+        await findCodex(this.settings.codexPath),
+        this.dataDir,
+      );
+      if (this.codex.persistent) {
+        const state = await this.codex.rpc("runtime/state");
+        this.activeTurns = new Map(state.turns);
+        for (const [id] of this.activeTurns) this.loaded.add(id);
+        this.approvals = new Map(
+          state.approvals.map((a: Approval) => [a.id, a]),
+        );
+      }
       if (this.codex.codexHome) {
         this.observer = new SessionObserver(this.codex.codexHome);
         this.observer.on("usage", ({ threadId, usage }) =>
@@ -384,12 +422,27 @@ export class HostService extends EventEmitter {
       await this.refreshThreads();
       await this.refreshLimits();
       this.broadcast({ type: "snapshot", snapshot: this.snapshot() });
+      await this.features.reconcile();
     } catch (e: any) {
       this.codex.error = e.message;
       this.codex.ready = false;
       this.emit("status");
       this.broadcast({ type: "agentStatus", ready: false, error: e.message });
+    } finally {
+      this.connecting = false;
     }
+  }
+  async reconnectAgent() {
+    if (this.connecting)
+      throw new Error("Agent connection is already starting.");
+    if (!this.codex.persistent && this.activeTurns.size)
+      throw new Error("Stop active work before reconnecting this runtime.");
+    this.codex.close();
+    await this.observer?.close();
+    this.loaded.clear();
+    this.activeTurns.clear();
+    this.approvals.clear();
+    await this.connectAgent();
   }
   async refreshThreads() {
     if (!this.codex.ready || this.refreshing || this.stopping) return;
@@ -583,11 +636,15 @@ export class HostService extends EventEmitter {
       this.setAgent(tid, { action: "working", active: true });
     }
     if (method === "turn/completed") {
+      this.completedTurns.add(p.turn.id);
+      if (this.completedTurns.size > 200)
+        this.completedTurns.delete(this.completedTurns.values().next().value!);
       this.activeTurns.delete(tid);
       this.setAgent(tid, {
         action: p.turn.status === "failed" ? "error" : "finished",
         active: false,
       });
+      void this.features.completed(tid, p.turn).catch(() => {});
       this.record({
         threadId: tid,
         agentId: tid,
@@ -648,11 +705,173 @@ export class HostService extends EventEmitter {
     )
       this.broadcast({ type: "agentEvent", method, params: p });
   }
-  async handle(method: string, p: any): Promise<any> {
+  async handle(method: string, p: any = {}, device = "local"): Promise<any> {
+    if (
+      [
+        "notifications.status",
+        "notifications.subscribe",
+        "notifications.unsubscribe",
+      ].includes(method)
+    )
+      return this.features.handle(method, p, device);
+    if (this.features.supports(method))
+      return this.features.handle(method, p, device);
+    const lock = ["thread.send", "thread.steer"].includes(method)
+      ? String(p.id)
+      : undefined;
+    if (lock && this.threadLocks.has(lock))
+      throw new Error("A message is already being sent to this conversation.");
+    if (lock) this.threadLocks.add(lock);
+    try {
+      return await this.dispatch(method, p);
+    } finally {
+      if (lock) this.threadLocks.delete(lock);
+    }
+  }
+  private async dispatch(method: string, p: any): Promise<any> {
     if (method === "snapshot") return this.snapshot();
     if (method === "note.read") return this.vault.read(String(p.id));
     if (!this.codex.ready)
       throw new Error(this.codex.error || "Agent connection is starting.");
+    if (method === "thread.rename") {
+      if (typeof p.name !== "string" || !p.name.trim() || p.name.length > 200)
+        throw new Error("Enter a name of up to 200 characters.");
+      await this.codex.rpc("thread/name/set", {
+        threadId: String(p.id),
+        name: p.name.trim(),
+      });
+      await this.refreshThreads();
+      return { id: p.id, name: p.name.trim() };
+    }
+    if (method === "thread.bulk") {
+      if (
+        !Array.isArray(p.ids) ||
+        !p.ids.length ||
+        p.ids.length > 100 ||
+        !["archive", "unarchive", "delete"].includes(p.action)
+      )
+        throw new Error("Select 1–100 conversations and an action.");
+      const ids = [...new Set<string>(p.ids)];
+      if (
+        p.action === "delete" &&
+        JSON.stringify(p.confirm) !== JSON.stringify(ids)
+      )
+        throw new Error("Confirm the selected conversations before deleting.");
+      const results = [];
+      for (const id of ids) {
+        try {
+          await this.handle("thread." + p.action, { id, confirm: id });
+          results.push({ id, ok: true });
+        } catch (e: any) {
+          results.push({ id, ok: false, error: e.message });
+        }
+      }
+      return { results };
+    }
+    if (method === "thread.recovery") {
+      const { thread } = await this.codex.rpc("thread/read", {
+        threadId: p.id,
+        includeTurns: true,
+      });
+      return {
+        id: thread.id,
+        persisted: thread.ephemeral === false || Boolean(thread.path),
+        path: thread.path,
+        cwd: thread.cwd,
+        codexHome: this.codex.codexHome,
+        resumeCommand: `codex resume ${thread.id}`,
+        turns: thread.turns?.length ?? null,
+        note: "Local runtime conversation. Desktop discovery depends on the same Windows account, Codex home and runtime compatibility. Stop active work before continuing from another runtime.",
+      };
+    }
+    if (
+      [
+        "thread.compact",
+        "thread.project",
+        "thread.goal",
+        "thread.fork",
+        "thread.review",
+      ].includes(method)
+    ) {
+      if (!this.threads.some((t) => t.id === p.id))
+        throw new Error("Conversation no longer exists.");
+      if (method === "thread.compact")
+        return this.codex.rpc("thread/compact/start", { threadId: p.id });
+      if (method === "thread.project") {
+        if (
+          p.projectId !== "" &&
+          !this.projects.some((project) => project.id === p.projectId)
+        )
+          throw new Error("Choose an existing runtime project.");
+        return this.codex.rpc("thread/metadata/update", {
+          threadId: p.id,
+          projectId: p.projectId,
+        });
+      }
+      if (method === "thread.review") {
+        if (!this.owned.has(p.id) || this.activeTurns.has(p.id))
+          throw new Error("Start reviews in an idle AgentView conversation.");
+        if (
+          !["uncommittedChanges", "baseBranch", "commit", "custom"].includes(
+            p.target?.type,
+          )
+        )
+          throw new Error("Choose a supported review target.");
+        return this.codex.rpc("review/start", {
+          threadId: p.id,
+          target: p.target,
+          delivery: "inline",
+        });
+      }
+      if (method === "thread.goal") {
+        const action = p.action || (p.objective === undefined ? "read" : "set");
+        if (action === "read")
+          return this.codex.rpc("thread/goal/get", { threadId: p.id });
+        if (action === "clear")
+          return this.codex.rpc("thread/goal/clear", { threadId: p.id });
+        if (
+          action !== "set" ||
+          (p.objective !== undefined &&
+            (typeof p.objective !== "string" || p.objective.length > 4000))
+        )
+          throw new Error(
+            "Choose a goal action and an objective of up to 4,000 characters.",
+          );
+        if (
+          p.tokenBudget !== undefined &&
+          p.tokenBudget !== null &&
+          (!Number.isSafeInteger(p.tokenBudget) || p.tokenBudget <= 0)
+        )
+          throw new Error("Goal budget must be a positive integer.");
+        if (
+          p.status !== undefined &&
+          ![
+            "active",
+            "paused",
+            "blocked",
+            "usageLimited",
+            "budgetLimited",
+            "complete",
+          ].includes(p.status)
+        )
+          throw new Error("Unsupported goal status.");
+        return this.codex.rpc("thread/goal/set", {
+          threadId: p.id,
+          objective: p.objective,
+          tokenBudget: p.tokenBudget,
+          status: p.status,
+        });
+      }
+      const result = await this.codex.rpc("thread/fork", {
+        threadId: p.id,
+        ...threadPolicy(this.features.preferences.defaultPermissions),
+      });
+      this.owned.add(result.thread.id);
+      this.loaded.add(result.thread.id);
+      await this.saveOwned();
+      await this.refreshThreads();
+      return result;
+    }
     if (method === "thread.list")
       return this.codex.rpc("thread/list", {
         limit: 100,
@@ -678,7 +897,14 @@ export class HostService extends EventEmitter {
         history = page.data.reverse();
         nextCursor = page.nextCursor;
       } catch (e) {
-        if (!thread || p.cursor) throw e;
+        if (p.cursor) throw e;
+        // Older runtimes expose legacy history through thread/read instead.
+        const stored = await this.codex.rpc("thread/read", {
+          threadId: p.id,
+          includeTurns: true,
+        });
+        thread = stored.thread;
+        history = stored.thread.turns || [];
       }
       const turns = new Map(
         history.map((t) => [t.id, { ...t, items: visibleItems(t.items) }]),
@@ -720,7 +946,8 @@ export class HostService extends EventEmitter {
         cwd: project.path,
         ...(project.runtime ? { projectId: project.id } : {}),
         ...(p.model ? { model: p.model } : {}),
-        historyMode: "paginated",
+        ephemeral: false,
+        ...threadPolicy(this.features.preferences.defaultPermissions),
       });
       this.liveThreads.set(thread.id, thread);
       this.owned.add(thread.id);
@@ -764,7 +991,7 @@ export class HostService extends EventEmitter {
     if (method === "thread.send" || method === "thread.steer") {
       if (
         typeof p.text !== "string" ||
-        !p.text.trim() ||
+        (!p.text.trim() && !p.attachments?.length) ||
         p.text.length > 100_000
       )
         throw new Error("Enter a message of up to 100,000 characters.");
@@ -772,6 +999,18 @@ export class HostService extends EventEmitter {
       if (this.threads.find((t) => t.id === id)?.archived)
         throw new Error("Restore this conversation before sending a message.");
       let text = p.text;
+      if (
+        p.attachments !== undefined &&
+        (!Array.isArray(p.attachments) || p.attachments.length > 8)
+      )
+        throw new Error("Attach up to eight files.");
+      const input: any[] = [];
+      for (const attachment of p.attachments || []) {
+        const file = await this.features.files.attachment(attachment.id);
+        if (/\.(png|jpe?g|webp|gif)$/i.test(file))
+          input.push({ type: "localImage", path: file });
+        else text += `\n\nAttached file on host: ${file}`;
+      }
       if (p.noteId) {
         const note = this.vault.read(p.noteId);
         text += `\n\nAttached vault note: ${p.noteId}\n<note-content>\n${note.body}\n</note-content>`;
@@ -789,7 +1028,7 @@ export class HostService extends EventEmitter {
         await this.codex.rpc("turn/steer", {
           threadId: id,
           expectedTurnId: turnId,
-          input: [{ type: "text", text }],
+          input: [{ type: "text", text }, ...input],
         });
         return { threadId: id, steered: true };
       }
@@ -798,6 +1037,7 @@ export class HostService extends EventEmitter {
         const { thread } = await this.codex.rpc("thread/fork", {
           threadId: id,
           excludeTurns: true,
+          ...threadPolicy(this.features.preferences.defaultPermissions),
         });
         this.liveThreads.set(thread.id, thread);
         id = thread.id;
@@ -808,6 +1048,7 @@ export class HostService extends EventEmitter {
         await this.codex.rpc("thread/resume", {
           threadId: id,
           excludeTurns: true,
+          ...threadPolicy(this.features.preferences.defaultPermissions),
         });
         this.loaded.add(id);
       }
@@ -817,11 +1058,22 @@ export class HostService extends EventEmitter {
         );
       const result = await this.codex.rpc("turn/start", {
         threadId: id,
-        input: [{ type: "text", text }],
+        input: [{ type: "text", text }, ...input],
+        ...turnPolicy(
+          this.features.preferences.defaultPermissions,
+          this.threads.find((t) => t.id === id)?.cwd || this.settings.vaultPath,
+        ),
+        ...(p.clientUserMessageId
+          ? { clientUserMessageId: p.clientUserMessageId }
+          : {}),
         ...(p.model ? { model: p.model } : {}),
         ...(p.effort ? { effort: p.effort } : {}),
       });
-      this.activeTurns.set(id, result.turn.id);
+      if (
+        !this.completedTurns.has(result.turn.id) &&
+        result.turn.status === "inProgress"
+      )
+        this.activeTurns.set(id, result.turn.id);
       await this.refreshThreads();
       return {
         threadId: id,
@@ -868,13 +1120,12 @@ export class HostService extends EventEmitter {
     throw new Error("Unknown AgentView action.");
   }
   private async saveOwned() {
-    await fs.writeFile(
-      path.join(this.dataDir, "threads.json"),
-      JSON.stringify([...this.owned]),
-    );
+    await saveState(path.join(this.dataDir, "threads.json"), [...this.owned]);
   }
   snapshot(): Snapshot {
     return {
+      capabilities: { apiVersion: 1, hostVersion: version },
+      preferences: this.features.preferences,
       graph: this.vault.graph,
       projects: this.allProjects(),
       limits: this.limits,
@@ -936,6 +1187,7 @@ export class HostService extends EventEmitter {
   }
   async revokeDevice(id: string) {
     await this.devices.revoke(id);
+    await this.features.push.remove(id);
     for (const socket of this.sockets)
       if (socket.deviceId === id)
         socket.close(4003, "This device was removed by the host.");
@@ -949,6 +1201,7 @@ export class HostService extends EventEmitter {
     };
   }
   private broadcast(event: AppEvent) {
+    event = this.features.record(event);
     const text = JSON.stringify(event);
     for (const socket of this.sockets) {
       if (socket.readyState !== WebSocket.OPEN) continue;

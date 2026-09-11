@@ -1,6 +1,6 @@
 {
   "name": "hardline-agentview",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "A living workspace for human and agent collaboration",
   "private": true,
   "type": "module",
@@ -40,6 +40,7 @@
     "react-markdown": "^10.0.0",
     "remark-gfm": "^4.0.1",
     "selfsigned": "^3.0.1",
+    "web-push": "^3.6.7",
     "ws": "^8.18.0"
   },
   "devDependencies": {
@@ -49,6 +50,7 @@
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/web-push": "^3.6.4",
     "@types/ws": "^8.5.0",
     "@vitejs/plugin-react": "^4.4.0",
     "electron": "44.3.0",
