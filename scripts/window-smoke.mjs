@@ -88,6 +88,7 @@ try {
   }
   async function reopen(label, previousId) {
     const began = performance.now();
+    const deadline = Date.now() + 4000;
     const child = spawn(launcher, launchArgs, {
       env,
       windowsHide: true,
@@ -100,7 +101,10 @@ try {
     child.on("error", (error) => {
       launchError = error.message;
     });
-    const exited = new Promise((resolve) => child.once("exit", resolve));
+    const exited = new Promise((resolve) => {
+      child.once("exit", resolve);
+      child.once("error", resolve);
+    });
     const launchTimeout = setTimeout(() => child.kill(), 4000);
     await exited;
     clearTimeout(launchTimeout);
@@ -109,7 +113,6 @@ try {
       0,
       `${label}: launcher failed. ${launchError}`,
     );
-    const deadline = Date.now() + 4000;
     while (
       !(await app.evaluate(({ BrowserWindow }, previousId) => {
         const window = BrowserWindow.getAllWindows()[0];
@@ -182,7 +185,14 @@ try {
   throw error;
 } finally {
   if (app) {
-    const timeout = setTimeout(() => app.process().kill(), 5000);
+    const timeout = setTimeout(() => {
+      // Playwright may own a Windows launcher process; stop only this fixture's tree.
+      void promisify(execFile)(
+        "taskkill.exe",
+        ["/PID", String(app.process().pid), "/T", "/F"],
+        { windowsHide: true },
+      ).catch(() => {});
+    }, 5000);
     await app.close().catch(() => {});
     clearTimeout(timeout);
   }
