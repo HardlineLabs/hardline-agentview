@@ -108,7 +108,9 @@ if ($RegisterStartup) {
     Register-ScheduledTask -TaskName $taskName -Action $action -Principal $taskPrincipal -Trigger $trigger -Settings $taskSettings -Description 'Start AgentView in its signed-in Windows session and recover unexpected exits.' -Force | Out-Null
     $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
     $runName = 'labs.hardline.agentview.host'
-    $legacy = Get-ItemPropertyValue -LiteralPath $runKey -Name $runName -ErrorAction SilentlyContinue
+    $legacy = $null
+    # A previous managed install has already removed this optional legacy value.
+    try { $legacy = Get-ItemPropertyValue -LiteralPath $runKey -Name $runName -ErrorAction Stop } catch { }
     if ($legacy -and $legacy.StartsWith('"' + $installRoot + '\', [StringComparison]::OrdinalIgnoreCase)) { Remove-ItemProperty -LiteralPath $runKey -Name $runName }
     Start-ScheduledTask -TaskName $taskName
 }
