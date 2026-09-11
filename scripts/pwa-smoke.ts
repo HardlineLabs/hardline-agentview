@@ -331,6 +331,47 @@ async function expandedWorkspace(page: Page, engine: string) {
     .locator(".chat-heading h3")
     .filter({ hasText: `${engine} renamed chat` })
     .waitFor();
+  // Full access must still deliver explicit approval decisions over the
+  // encrypted connection, including after a client reload.
+  const approvalThread = first
+    .snapshot()
+    .threads.find((thread) => thread.name === `${engine} renamed chat`)!;
+  assert.ok(approvalThread);
+  const originalRespond = first.codex.respond;
+  const decisions: unknown[] = [];
+  first.codex.respond = (_id, result) => {
+    decisions.push(result);
+  };
+  try {
+    for (const [index, button, decision] of [
+      [0, "Decline", "decline"],
+      [1, "Allow", "accept"],
+    ] as const) {
+      first.codex.emit("request", {
+        id: `${engine}-approval-${index}`,
+        method: "item/commandExecution/requestApproval",
+        params: {
+          threadId: approvalThread.id,
+          command: "Write-Output 'AgentView approval fixture'",
+          reason: "Verify the requested action before allowing it.",
+        },
+      });
+      await page.locator(".approval-card").waitFor();
+      if (index === 0) {
+        await page.reload();
+        await page.locator(".approval-card").waitFor();
+      }
+      assert.equal(decisions.length, index, "Never silently approve a request");
+      await page
+        .locator(".approval-card")
+        .getByRole("button", { name: button, exact: true })
+        .click();
+      await page.locator(".approval-card").waitFor({ state: "detached" });
+      assert.deepEqual(decisions[index], { decision });
+    }
+  } finally {
+    first.codex.respond = originalRespond;
+  }
   await page.getByRole("button", { name: "Recovery", exact: true }).click();
   await page.getByText("Saved in the host runtime", { exact: true }).waitFor();
   await page

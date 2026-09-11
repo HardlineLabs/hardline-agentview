@@ -7,7 +7,8 @@ export function permissionMode(value: unknown): PermissionMode {
 }
 export function threadPolicy(mode: PermissionMode) {
   return {
-    approvalPolicy: mode === "full" ? "never" : "on-request",
+    // Full filesystem access must not disable the user's approval channel.
+    approvalPolicy: "on-request",
     sandbox:
       mode === "full"
         ? "danger-full-access"
@@ -18,7 +19,7 @@ export function threadPolicy(mode: PermissionMode) {
 }
 export function turnPolicy(mode: PermissionMode, cwd: string) {
   return {
-    approvalPolicy: mode === "full" ? "never" : "on-request",
+    approvalPolicy: "on-request",
     sandboxPolicy:
       mode === "full"
         ? { type: "dangerFullAccess" }
