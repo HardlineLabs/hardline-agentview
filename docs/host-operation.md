@@ -30,8 +30,15 @@ hidden-window override can suppress the first user request to reveal the window.
 ## Permissions and computer use
 
 Choose **Host → Default agent permissions → Full access** for a dedicated agent
-computer. This sets Codex's full filesystem/network sandbox policy and `never`
+computer. This sets Codex's full filesystem/network sandbox policy and `on-request`
 approval policy for new conversations and each new turn, including resumed chats.
+Routine work can run outside the workspace; actions requiring approval can reach
+the configured Codex reviewer instead of being denied because prompts are disabled.
+AgentView does not automatically accept approvals. Full access does not override
+explicit forbidden rules or managed restrictions. Before Host 0.4.2-dev.3, Full
+access forced `never`; changing Codex's global approval setting or restarting its
+runtime did not remove that Host override. Updating Host applies the correction
+on the next new turn without restarting the execution worker.
 Changing the default does not alter a turn already running. Workspace and Read
 only modes remain available. Organization requirements and individual connected
 apps can impose their own restrictions.
@@ -131,6 +138,13 @@ verify that the first explicit open produces a responsive native Windows window
 without replacing the running network process.
 
 `npx tsx scripts/runtime-smoke.ts` performs a real agent turn with an image and an
-outside-workspace file write, checks zero approval requests under Full access,
+outside-workspace file write, checks unrestricted access with `on-request` on
+start and resume and zero approval requests for that routine write,
 then verifies persisted history and resume from another app-server. It consumes
 account usage and deletes only its newly created test conversation and directory.
+
+After installation, set `AGENTVIEW_LIVE_TEST=1` and `AGENTVIEW_DATA_DIR` to the
+installed Host data directory, then run `npx tsx scripts/installed-permissions-smoke.ts`.
+With Full access selected and an existing paired client, this creates one no-tool
+test turn through the running Host and checks its recorded approval/sandbox policy.
+It removes only that test conversation; existing agents and pairings are preserved.

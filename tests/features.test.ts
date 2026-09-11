@@ -188,6 +188,10 @@ test("permissions, rename, bulk results, legacy persistence and image input reac
       "danger-full-access",
     );
     assert.equal(
+      calls.find((c) => c.method === "thread/start").p.approvalPolicy,
+      "on-request",
+    );
+    assert.equal(
       calls.find((c) => c.method === "thread/start").p.ephemeral,
       false,
     );
@@ -211,7 +215,7 @@ test("permissions, rename, bulk results, legacy persistence and image input reac
       attachments: [uploaded],
     });
     const turn = calls.find((c) => c.method === "turn/start");
-    assert.equal(turn.p.approvalPolicy, "never");
+    assert.equal(turn.p.approvalPolicy, "on-request");
     assert.equal(turn.p.sandboxPolicy.type, "dangerFullAccess");
     assert.equal(turn.p.input[1].type, "localImage");
     assert.ok(path.isAbsolute(turn.p.input[1].path));

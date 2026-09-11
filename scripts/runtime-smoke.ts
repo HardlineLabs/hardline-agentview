@@ -22,7 +22,7 @@ try {
     ...threadPolicy("full"),
   });
   id = started.thread.id;
-  assert.equal(started.approvalPolicy, "never");
+  assert.equal(started.approvalPolicy, "on-request");
   assert.equal(started.sandbox.type, "dangerFullAccess");
   await first.rpc("thread/name/set", {
     threadId: id,
@@ -78,6 +78,8 @@ try {
     ...threadPolicy("full"),
   });
   assert.equal(resumed.thread.id, id);
+  assert.equal(resumed.approvalPolicy, "on-request");
+  assert.equal(resumed.sandbox.type, "dangerFullAccess");
   console.log(
     JSON.stringify({
       threadId: id,
