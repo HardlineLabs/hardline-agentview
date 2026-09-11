@@ -8,13 +8,33 @@ directory, billing system, hosted multi-tenant runtime or public registration.
 
 ## Pairing and transport
 
-Use **Pair device** in Host to create a named, five-minute, one-use invitation.
-Scan the QR code on Android or paste the invitation in either client. Generating
+Use **Pair device** in Host 0.4.1 to create a named, five-minute, six-digit code.
+Enter it in the iPhone PWA. Host first verifies the public TLS endpoint and its
+encrypted host proof without redeeming the invitation. An optional QR opens the
+PWA with the code filled in; scanning is no longer required. Generating
 another invitation invalidates the previous unused invitation. Successful pairing
 replaces it with an independent random credential, stored using Windows
 safeStorage or Android Keystore. Host lists paired devices and can remove one
 without changing other devices' credentials. Removing access closes active
-sessions. Each host supports up to 100 paired devices.
+sessions. Each host supports up to 100 paired devices. Windows/native Android
+clients retain full invitations under **Older clients and local pairing**.
+
+Six-digit discovery uses `app.hardline-labs.com/api/pair`, a trusted Cloudflare
+Worker with a SQLite Durable Object. It temporarily holds the invitation and
+public route, not files, conversations, Codex credentials or permanent device
+credentials. This expands initial-pairing trust to the directory operator;
+workspace messages continue directly over the existing encrypted WSS protocol.
+The code is never the encryption key. A random 256-bit invitation credential
+authenticates the handshake, then Host issues an independent device credential.
+
+Codes expire within five minutes and are claimed atomically by one random client
+identifier. A retry by that same identifier can recover a lost lookup response;
+another client cannot reuse it. The browser saves the identifier encrypted before
+lookup. The directory permits 10 claims per caller per ten minutes and 30 globally
+per minute, bounds active entries to 100, and rate-limits publishing. It removes
+expired entries using scheduled cleanup, caches no API responses, and disables
+Worker request logs. Codes remain access credentials; share only with the intended
+device owner. Existing paired devices reconnect without using the directory.
 
 Choose **Auto**, **LAN**, or **Remote** before scanning or pasting an invitation.
 Remote skips LAN entirely; LAN never falls back to the internet. The selection
@@ -54,6 +74,7 @@ the host and all clients, then pair devices again.
 
 The [PWA](pwa.md) connects to the same remote WSS endpoint using protocol 3.
 Its static web host delivers the interface and does not process workspace messages.
+Its separate pairing routes handle only the temporary setup exchange described above.
 Browser clients require a publicly trusted endpoint; the native pinned LAN route
 is unavailable. Current host authentication does not use cookies or rely on browser
 Origin headers: every session must prove possession of its per-device credential.
@@ -65,8 +86,10 @@ address, credential or shared runtime.
 Remote traffic goes from the client through a dedicated Cloudflare hostname and
 outbound tunnel to the host. The website application does not process these
 messages. Tunnel credentials stay on the host, never in Android or desktop
-clients. Local traffic does not use Cloudflare. No Workers, Durable Objects,
-database, relay VM or paid Cloudflare upgrade is required by this architecture.
+clients. Local traffic does not use Cloudflare. Six-digit discovery adds a Worker
+and SQLite Durable Object on the existing web deployment. It does not relay
+workspace messages. The configuration uses resources available on the free plan;
+no paid upgrade is provisioned.
 
 Install `cloudflared`, authenticate it to a Cloudflare zone you own, and start
 AgentView Host once. Then, from PowerShell 7 in this checkout:

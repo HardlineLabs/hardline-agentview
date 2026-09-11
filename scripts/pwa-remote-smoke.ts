@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { pairingRequest } from "../src/shared/pairing-code";
+import { checkRemotePairing } from "../src/host/remote-pairing";
+import { randomBytes } from "node:crypto";
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import path from "node:path";
@@ -125,9 +128,22 @@ try {
       );
       page.on("pageerror", (error) => errors.push(error.message));
       await page.goto(url);
-      await page.getByLabel("Connection key").waitFor();
+      await page.getByLabel("Pairing code", { exact: true }).waitFor();
       const invitation = await host.createInvitation("Public PWA verification");
-      await page.getByLabel("Connection key").fill(invitation.code);
+      if (!process.env.AGENTVIEW_TEST_DNS)
+        await checkRemotePairing(host.localConnection());
+      const published = await pairingRequest(
+        "publish",
+        {
+          invitation: invitation.code,
+          expiresAt: invitation.expiresAt,
+          token: randomBytes(32).toString("hex"),
+        },
+        new URL("/api/pair", url).href,
+      );
+      await page
+        .getByLabel("Pairing code", { exact: true })
+        .fill(published.code);
       await page
         .getByRole("button", { name: "Connect to workspace", exact: true })
         .click();

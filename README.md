@@ -11,9 +11,11 @@ start-at-sign-in. **Allow LAN connections** asks Windows to allow the configured
 port from the local subnet. Keep the host computer awake and signed in; closing
 its window leaves it in the tray.
 
-Choose **Pair device**, name the phone or computer, then scan the invitation on
-Android or paste it into **AgentView.exe**. Invitations expire in five minutes and
-work once. The host can remove a paired device's access at any time. Each paired
+For iPhone, choose **Pair device**, name the phone, and enter the six-digit code
+at [app.hardline-labs.com](https://app.hardline-labs.com). Host checks remote
+reachability first. Codes expire in five minutes and work for one device.
+Windows/native Android clients use **Older clients and local pairing → Create full
+invitation**. The host can remove a paired device's access at any time. Each paired
 device has full access to this workspace. Version 0.3 requires fresh pairing;
 connection keys from 0.2 no longer work.
 
@@ -40,7 +42,7 @@ validation](docs/android.md) for developer setup and signed releases.
 ## On iPhone and the web
 
 Open the AgentView PWA in Safari and add it to your Home Screen. Open its new icon,
-then scan a fresh invitation from your own Host with Remote access configured.
+then enter a fresh six-digit code from your own Host with Remote access configured.
 The web app shares the Android interface and uses the existing encrypted protocol;
 Host 0.4 enables saved Full Access defaults, onboarding, renamed chats, bulk
 archive/delete, image/file attachments, durable drafts, files, queued follow-ups
@@ -102,6 +104,11 @@ npm run host
 # In a second terminal:
 npm run client
 ```
+
+Use `npm run package:host` when shipping only Host and the PWA. Build the browser
+separately with `npm run pwa:build`.
+`AGENTVIEW_PACKAGE_OUTPUT` can select a fresh output directory when Windows has
+locked a previous build. The package contains the bundled app, not dependency build caches.
 
 `npm run package` creates `out/host/AgentView Host.exe` and
 `out/client/AgentView.exe`. No installer or administrator privileges are required

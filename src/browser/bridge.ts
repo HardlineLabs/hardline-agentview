@@ -6,6 +6,7 @@ import {
 } from "../shared/pairing";
 import type { AppEvent, Connection, DesktopBridge } from "../shared/types";
 import { loadPrivate, removePrivate, savePrivate } from "./storage";
+import { claimPairingCode, sixDigitCode } from "../shared/pairing-code";
 
 export const browserDrafts = new Map<string, string>();
 export type Attachment = {
@@ -98,6 +99,7 @@ export function browserBridge(): DesktopBridge {
   const client = new WorkspaceConnection(dial, emit, async (config) => {
     await savePrivate("connection", encodeConnection(config));
     paired = config;
+    await removePrivate("pairingClaim");
   });
   async function reconcile() {
     for (const [requestId, outgoing] of browserOutbox) {
@@ -123,6 +125,7 @@ export function browserBridge(): DesktopBridge {
   }
   let loading: Promise<unknown> | undefined;
   let generation = 0;
+  let connecting = false;
   let suspended = false;
   const suspend = () => {
     if (!paired) return;
@@ -196,35 +199,68 @@ export function browserBridge(): DesktopBridge {
         })());
       }
       if (method === "connection.connect") {
-        if (!isSecureContext || !crypto.subtle)
-          throw new Error("Open AgentView using its HTTPS address.");
-        const config = decodeConnection(params.code);
-        config.routePreference = "remote";
-        if (params.address?.trim())
-          config.remoteAddress = remoteAddress(
-            params.address.startsWith("wss://")
-              ? params.address
-              : "wss://" + params.address,
-          );
-        if (!config.remoteAddress)
-          throw new Error(
-            "Enable Remote access in AgentView Host, then create a new pairing invitation. The web app needs a secure remote endpoint.",
-          );
-        ++generation;
-        paired = undefined;
-        selectedDraft = undefined;
-        client.disconnect();
-        await saving.catch(() => {});
-        await removePrivate("resume");
-        await removePrivate("connection");
-        browserDrafts.clear();
-        browserAttachments.clear();
-        browserOutbox.clear();
-        await removePrivate("drafts");
-        paired = undefined;
-        suspended = false;
-        client.connect(config);
-        return {};
+        if (connecting) return {};
+        connecting = true;
+        emit({
+          type: "connection",
+          state: "connecting",
+          route: "remote",
+          message: "Preparing your connection…",
+        });
+        try {
+          if (!isSecureContext || !crypto.subtle)
+            throw new Error("Open AgentView using its HTTPS address.");
+          // Test storage before redeeming a one-use code or the host's invitation.
+          await savePrivate("pairingProbe", true);
+          await removePrivate("pairingProbe");
+          const digits = sixDigitCode(String(params.code || ""));
+          const previousClaim = digits
+            ? await loadPrivate<{ code: string; claimId: string }>(
+                "pairingClaim",
+              )
+            : undefined;
+          const claimId =
+            previousClaim && previousClaim.code === digits
+              ? previousClaim.claimId
+              : crypto.randomUUID();
+          if (digits)
+            await savePrivate("pairingClaim", { code: digits, claimId });
+          const config = digits
+            ? await claimPairingCode(
+                digits,
+                claimId,
+                new URL("/api/pair", location.origin).href,
+              )
+            : decodeConnection(params.code);
+          config.routePreference = "remote";
+          if (params.address?.trim())
+            config.remoteAddress = remoteAddress(
+              params.address.startsWith("wss://")
+                ? params.address
+                : "wss://" + params.address,
+            );
+          if (!config.remoteAddress)
+            throw new Error(
+              "Enable Remote access in AgentView Host, then create a new pairing invitation. The web app needs a secure remote endpoint.",
+            );
+          ++generation;
+          paired = undefined;
+          selectedDraft = undefined;
+          client.disconnect();
+          await saving.catch(() => {});
+          await removePrivate("resume");
+          await removePrivate("connection");
+          browserDrafts.clear();
+          browserAttachments.clear();
+          browserOutbox.clear();
+          await removePrivate("drafts");
+          paired = undefined;
+          suspended = false;
+          client.connect(config);
+          return {};
+        } finally {
+          connecting = false;
+        }
       }
       if (method === "connection.disconnect") {
         ++generation;
@@ -241,6 +277,7 @@ export function browserBridge(): DesktopBridge {
         await removePrivate("connection");
         await removePrivate("resume");
         emit({ type: "connection", state: "disconnected" });
+        await removePrivate("pairingClaim");
         return {};
       }
       if (method === "clipboard.write") {

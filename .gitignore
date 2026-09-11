@@ -5,3 +5,4 @@ artifacts/
 .local/
 coverage/
 *.log
+.wrangler/

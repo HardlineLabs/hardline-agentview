@@ -2342,3 +2342,28 @@ meter::-webkit-meter-optimum-value {
     transition: none !important;
   }
 }
+
+.pairing-digits {
+  display: block;
+  font-size: 44px;
+  letter-spacing: 0.15em;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  padding: 12px 0;
+}
+.pairing-code-input {
+  font-size: 30px !important;
+  letter-spacing: 0.18em;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.connection-progress {
+  color: var(--muted);
+  margin-top: 16px;
+}
+.legacy-pairing {
+  margin: 12px 0;
+}
+.legacy-pairing textarea {
+  margin: 10px 0;
+}

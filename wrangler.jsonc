@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "hardline-agentview",
+  "account_id": "fe0dce3b99af321b39cf660d15f4c75e",
+  "main": "cloud/worker.ts",
+  "compatibility_date": "2026-09-11",
+  "assets": {
+    "directory": "./dist/client",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/pair/*"],
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "PAIRING", "class_name": "PairingDirectory" }],
+  },
+  "migrations": [
+    { "tag": "pairing-v1", "new_sqlite_classes": ["PairingDirectory"] },
+  ],
+  "observability": { "enabled": false },
+  "workers_dev": false,
+  "routes": [{ "pattern": "app.hardline-labs.com", "custom_domain": true }],
+}

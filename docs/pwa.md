@@ -12,10 +12,18 @@ repositories, agent sign-in and execution. There is no shared hosted agent accou
    **Open as Web App** enabled if shown, and tap **Add**.
 3. Open AgentView from its new icon before pairing. Browser tabs and installed apps
    may have separate storage on iOS.
-4. On your computer, run AgentView Host 0.4 or later for all controls, select your vault and
+4. On your computer, run AgentView Host 0.4.1 or later for code pairing, select your vault and
    configure [Remote access](remote-access.md). Choose **Pair device**.
-5. In the PWA, scan the invitation or paste it and choose **Connect to workspace**.
-   Camera frames are decoded on the phone and never uploaded.
+5. Enter the six-digit code in the PWA and choose **Connect to workspace**.
+   No camera or host-address entry is required. Spaces and leading zeroes work.
+   Codes last five minutes and pair one device. An optional QR fills the code;
+   full invitations remain under **Have an older invitation or QR?**.
+
+If an older invitation says to enable Remote access, it contains no remote
+endpoint. Create a new code after configuring and restarting Host. Host now
+checks public reachability before issuing codes. The phone shows progress as soon
+as Connect is pressed and reports blocked/unavailable browser storage with a
+bounded timeout. Close other AgentView tabs and retry if storage is blocked.
 
 The same site works on Android and desktop browsers. Supporting browsers offer an
 **Install app** prompt. No App Store account or native client reinstall is needed.
@@ -100,13 +108,13 @@ npm run pwa:smoke
 client assets into `dist/client`, including a content-versioned service worker and
 install icons. Cloudflare Workers Static Assets serves the `hardline-agentview`
 application at `app.hardline-labs.com`; source remains in this private repository.
-To publish, build and validate the intended revision, zip the **contents** of
-`dist/client` (with `index.html` at the archive root), then open Cloudflare's
-Workers & Pages dashboard, select `hardline-agentview` and create a deployment
-with that archive. Upload the complete build, including `_headers`, `sw.js`,
-the manifest, icons and assets. Keep this a static-assets deployment without a
-Worker script or hosted workspace data. No paid plan is required for static asset
-requests. The custom domain is managed in the application's Domains tab.
+To publish, build and validate the intended revision, sign into Wrangler for the
+owning Cloudflare account, then run `npx wrangler deploy`. The tracked
+`wrangler.jsonc` publishes the complete static build plus the six-digit pairing
+directory at `/api/pair/*`. Keep the same custom domain and SQLite binding when
+updating; an assets-only dashboard upload would remove code pairing. Static files
+remain separately cached; pairing API responses are never cached. See
+[remote access](remote-access.md) for the directory's trust and expiry boundaries.
 Verify the public-path check below after publishing.
 
 Never copy host settings, pairing invitations or tunnel credentials
