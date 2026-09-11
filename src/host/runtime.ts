@@ -140,7 +140,13 @@ async function main() {
           setTimeout(() => process.exit(0), 500);
           return;
         } else {
-          inFlight++;
+          const startsWork = [
+            "turn/start",
+            "review/start",
+            "thread/goal/set",
+            "thread/resume",
+          ].includes(message.method);
+          if (startsWork) inFlight++;
           try {
             result = await codex.rpc(message.method, message.params);
             if (
@@ -150,7 +156,7 @@ async function main() {
             )
               turns.set(message.params.threadId, result.turn.id);
           } finally {
-            inFlight--;
+            if (startsWork) inFlight--;
           }
         }
         send(socket, { id: message.id, result });
