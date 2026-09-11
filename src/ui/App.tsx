@@ -1,3 +1,5 @@
+import { PwaControls } from "../browser/PwaControls";
+import { Scanner } from "../browser/Scanner";
 import { useEffect, useRef, useState } from "react";
 import {
   Activity as ActivityIcon,
@@ -38,6 +40,7 @@ import {
   ago,
   bridge,
   mobile,
+  browser,
   colors,
   domainLabel,
   invoke,
@@ -470,7 +473,10 @@ function Connect({
   const [code, setCode] = useState("");
   const [address, setAddress] = useState("");
   const [scanError, setScanError] = useState("");
-  const [routePreference, setRoutePreference] = useState("auto");
+  const [routePreference, setRoutePreference] = useState(
+    browser ? "remote" : "auto",
+  );
+  const [scanning, setScanning] = useState(false);
   const connecting = state === "connecting" || state === "reconnecting";
   return (
     <div className="connect-page">
@@ -487,6 +493,15 @@ function Connect({
         <span className="satellite s-four" />
       </div>
       <div className="connect-copy">
+        {browser && (
+          <img
+            className="web-pairing-icon"
+            src="/icons/icon-192.png"
+            width="52"
+            height="52"
+            alt=""
+          />
+        )}
         <span className="eyebrow">HARDLINE LABS / AGENTVIEW</span>
         <h1>
           A little closer
@@ -494,9 +509,18 @@ function Connect({
           to your <em>next idea.</em>
         </h1>
         <p>
-          Your conversations. Your living brain.
-          <br />
-          One calm place to bring it all together.
+          {browser ? (
+            <>
+              Open AgentView Host on your computer, enable Remote access, then
+              choose <strong>Pair device</strong>.
+            </>
+          ) : (
+            <>
+              Your conversations. Your living brain.
+              <br />
+              One calm place to bring it all together.
+            </>
+          )}
         </p>
         <form
           onSubmit={(e) => {
@@ -504,30 +528,38 @@ function Connect({
             onConnect(code, address, routePreference);
           }}
         >
-          <fieldset className="connection-routes" disabled={connecting}>
-            <legend>Connection route</legend>
-            {[
-              ["auto", "Auto"],
-              ["local", "LAN"],
-              ["remote", "Remote"],
-            ].map(([value, label]) => (
-              <button
-                type="button"
-                key={value}
-                aria-pressed={routePreference === value}
-                onClick={() => setRoutePreference(value)}
-              >
-                {label}
-              </button>
-            ))}
-          </fieldset>
-          <div className="connection-route-hint">
-            {routePreference === "remote"
-              ? "Connect through the internet. Skip LAN."
-              : routePreference === "local"
-                ? "Connect only over the host's local network."
-                : "Try LAN first, then the remote endpoint."}
-          </div>
+          {browser ? (
+            <div className="web-pairing-note">
+              <ShieldCheck size={16} /> Encrypted connection to your computer
+            </div>
+          ) : (
+            <>
+              <fieldset className="connection-routes" disabled={connecting}>
+                <legend>Connection route</legend>
+                {[
+                  ["auto", "Auto"],
+                  ["local", "LAN"],
+                  ["remote", "Remote"],
+                ].map(([value, label]) => (
+                  <button
+                    type="button"
+                    key={value}
+                    aria-pressed={routePreference === value}
+                    onClick={() => setRoutePreference(value)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </fieldset>
+              <div className="connection-route-hint">
+                {routePreference === "remote"
+                  ? "Connect through the internet. Skip LAN."
+                  : routePreference === "local"
+                    ? "Connect only over the host's local network."
+                    : "Try LAN first, then the remote endpoint."}
+              </div>
+            </>
+          )}
           {mobile && (
             <button
               type="button"
@@ -535,6 +567,10 @@ function Connect({
               disabled={connecting}
               onClick={async () => {
                 setScanError("");
+                if (browser) {
+                  setScanning(true);
+                  return;
+                }
                 try {
                   const result = await invoke("connection.scan");
                   setCode(result.value);
@@ -559,7 +595,9 @@ function Connect({
             <summary>Use a different host address</summary>
             <input
               aria-label="Host address"
-              placeholder="192.168.1.10:43120"
+              placeholder={
+                browser ? "wss://your-host.example.com" : "192.168.1.10:43120"
+              }
               value={address}
               onChange={(e) => setAddress(e.target.value)}
             />
@@ -573,6 +611,22 @@ function Connect({
             {connecting ? "Finding your workspace…" : "Connect to workspace"}
           </button>
         </form>
+        {browser && (
+          <p className="pairing-storage-note">
+            Pairing is remembered in this browser. Only pair a device you trust.
+            You can remove its access from Host at any time.
+          </p>
+        )}
+        {scanning && (
+          <Scanner
+            onClose={() => setScanning(false)}
+            onScan={(value) => {
+              setScanning(false);
+              setCode(value);
+              onConnect(value, address, "remote");
+            }}
+          />
+        )}
         {(message || scanError) && (
           <div className="inline-error">{message || scanError}</div>
         )}
@@ -756,6 +810,10 @@ function ClientApp() {
     const unsubscribe = subscribe(onEvent);
     void invoke("connection.load")
       .then((result) => {
+        if (result.selectedThread) {
+          threadRef.current = result.selectedThread;
+          setSelectedThread(result.selectedThread);
+        }
         if (result.snapshot) {
           setSnapshot(result.snapshot);
           setConnection("connected");
@@ -860,9 +918,20 @@ function ClientApp() {
   };
   return (
     <div
-      className={`client-app phone-${phoneView} ${drawer ? "drawer-open" : ""} ${mobile ? "native-mobile" : ""}`}
+      className={`client-app ${browser ? "browser-app" : ""} phone-${phoneView} ${drawer ? "drawer-open" : ""} ${mobile ? "native-mobile" : ""}`}
     >
       <WindowBar />
+      {browser && <PwaControls selectedThread={selectedThread} />}
+      {browser && snapshot && !connected && connectionError && (
+        <div className="pwa-error" role="status">
+          <span>{connectionError}</span>
+          {connection === "error" && (
+            <button onClick={() => setSettingsOpen(true)}>
+              Connection settings
+            </button>
+          )}
+        </div>
+      )}
       {!snapshot ? (
         <Connect
           state={connection}
@@ -1483,16 +1552,30 @@ function ClientApp() {
               <Server size={18} />
             </div>
             <p className="settings-help">
-              Local connections go directly to your paired host. Remote sessions
-              use its secure endpoint. Remove this device from Host to revoke
-              access.
+              {browser
+                ? "This web app connects through your host�s secure remote endpoint. Device pairing is stored in this browser. Remove this device from Host to revoke access."
+                : "Local connections go directly to your paired host. Remote sessions use its secure endpoint. Remove this device from Host to revoke access."}
             </p>
             <button
               className="secondary full-width"
-              onClick={() => {
-                void invoke("connection.disconnect");
-                setSnapshot(undefined);
-                setSettingsOpen(false);
+              onClick={async () => {
+                try {
+                  await invoke("connection.disconnect");
+                  ++readGeneration.current;
+                  ++noteGeneration.current;
+                  setSnapshot(undefined);
+                  setSelectedThread(undefined);
+                  setPage(undefined);
+                  setSelected(undefined);
+                  setBody("");
+                  setAttachment(undefined);
+                  setProjectFilter("");
+                  setSectionFilter("");
+                  setSettingsOpen(false);
+                  setDrawer(false);
+                } catch (e: any) {
+                  notify(e.message);
+                }
               }}
             >
               Disconnect & change host

@@ -50,6 +50,16 @@ Protect that account and directory. Pairing invitations grant workspace access;
 do not publish them. Old 0.2 connection keys are deliberately unsupported. Upgrade
 the host and all clients, then pair devices again.
 
+## Browser clients
+
+The [PWA](pwa.md) connects to the same remote WSS endpoint using protocol 3.
+Its static web host delivers the interface and does not process workspace messages.
+Browser clients require a publicly trusted endpoint; the native pinned LAN route
+is unavailable. Current host authentication does not use cookies or rely on browser
+Origin headers: every session must prove possession of its per-device credential.
+The client permits WSS connections to user-paired hosts, with no embedded host
+address, credential or shared runtime.
+
 ## Cloudflare Tunnel
 
 Remote traffic goes from the client through a dedicated Cloudflare hostname and

@@ -22,7 +22,8 @@ import {
 import { ContextUsage } from "./Usage";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { invoke } from "./api";
+import { invoke, browser } from "./api";
+import { browserDrafts } from "../browser/bridge";
 import type {
   Approval,
   ChatItem,
@@ -258,7 +259,7 @@ type Props = {
 };
 export function Chat(props: Props) {
   const [text, setText] = useState("");
-  const drafts = useRef(new Map<string, string>());
+  const drafts = useRef(browser ? browserDrafts : new Map<string, string>());
   const [sending, setSending] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [confirmClear, setConfirmClear] = useState<"archive" | "delete">();
@@ -484,6 +485,7 @@ export function Chat(props: Props) {
                     key={s}
                     onClick={() => {
                       setText(s);
+                      drafts.current.set(props.thread?.id || "new", s);
                       input.current?.focus();
                     }}
                   >

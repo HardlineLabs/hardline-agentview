@@ -1,7 +1,10 @@
 import type { AppEvent } from "../shared/types";
-import { mobileBridge } from "../mobile/bridge";
-export { mobile } from "../mobile/bridge";
-export const bridge = window.agentview || mobileBridge();
+import { mobileBridge, mobile as native } from "../mobile/bridge";
+import { browserBridge } from "../browser/bridge";
+export const browser = import.meta.env.MODE === "pwa";
+export const mobile = native || browser;
+export const bridge =
+  window.agentview || mobileBridge() || (browser ? browserBridge() : undefined);
 if (bridge && !window.agentview) window.agentview = bridge;
 export const invoke = (method: string, params?: any): Promise<any> =>
   bridge

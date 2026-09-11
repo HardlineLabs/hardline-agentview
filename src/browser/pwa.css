@@ -1,0 +1,248 @@
+.browser-app {
+  height: var(--app-height, 100dvh);
+  position: relative;
+  top: var(--app-top, 0px);
+}
+.browser-app .window-bar {
+  display: none;
+}
+.pwa-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  background: #172725;
+  border-bottom: 1px solid #b6dfd11c;
+  color: #b6c9c5;
+  font-size: 12px;
+}
+.pwa-bar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+  min-height: 32px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #b6dfd114;
+  color: #d5f1e6;
+  font-size: 12px;
+}
+.pwa-error {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: #3c3024;
+  color: #f2d7b5;
+  font-size: 13px;
+}
+.pwa-error button {
+  margin-left: auto;
+}
+.browser-app .connect-page {
+  min-height: 0;
+  overflow-y: auto;
+}
+.web-pairing-note {
+  display: flex;
+  gap: 10px;
+  color: #b6dfd1;
+  align-items: center;
+  margin-bottom: 14px;
+  font-size: 14px;
+}
+.browser-app .connect-copy > p {
+  max-width: 34rem;
+}
+.browser-app .connect-copy form > label {
+  display: block;
+  margin: 8px 0;
+}
+.browser-app .connect-copy textarea {
+  resize: vertical;
+}
+.browser-app .connect-copy details input {
+  margin: 12px 0;
+  width: 100%;
+}
+.browser-app .connect-copy > .pairing-storage-note {
+  font-size: 12px;
+  color: #a1b3b5;
+  line-height: 1.6;
+  margin: 12px 0;
+}
+.install-card {
+  width: min(440px, calc(100vw - 32px));
+  max-height: calc(100dvh - 48px);
+  overflow: auto;
+  position: relative;
+  background: #111e24;
+  border: 1px solid #b6dfd130;
+  border-radius: 24px;
+  padding: 30px;
+  box-shadow: 0 30px 100px #0009;
+}
+.install-card > img {
+  display: block;
+  margin-bottom: 24px;
+}
+.install-card h2 {
+  font:
+    500 26px/1.2 Manrope,
+    sans-serif;
+  margin: 12px 0 18px;
+}
+.install-card p,
+.install-card li {
+  font-size: 15px;
+  line-height: 1.65;
+  color: #bac8cb;
+}
+.install-card ol {
+  padding-left: 22px;
+  margin: 20px 0;
+}
+.install-card li {
+  margin-bottom: 14px;
+  padding-left: 5px;
+}
+.install-card li svg {
+  vertical-align: middle;
+  margin-right: 8px;
+  color: #b6dfd1;
+}
+.install-card .install-note {
+  font-size: 13px;
+  margin: 20px 0;
+}
+.install-close {
+  position: absolute;
+  right: 16px;
+  top: 16px;
+}
+.scanner-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: #091115;
+  padding: max(20px, env(safe-area-inset-top)) 20px
+    max(24px, env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 20px;
+  overflow-y: auto;
+}
+.scanner-backdrop header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 600px;
+}
+.scanner-backdrop header span {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.scanner-view {
+  position: relative;
+  width: min(100%, 540px);
+  aspect-ratio: 1;
+  min-height: 180px;
+  background: #020405;
+  border-radius: 24px;
+  overflow: hidden;
+}
+.scanner-view video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.scanner-frame {
+  position: absolute;
+  inset: 12%;
+  border: 2px solid #b6dfd1b0;
+  border-radius: 20px;
+  pointer-events: none;
+}
+.scanner-view > svg {
+  position: absolute;
+  top: 48%;
+  left: 48%;
+}
+.scanner-backdrop > p {
+  max-width: 440px;
+  font-size: 16px;
+  line-height: 1.6;
+  text-align: center;
+  color: #bac8cb;
+}
+@media (max-width: 760px) {
+  .browser-app .connect-page {
+    padding: 24px 24px 32px;
+    justify-content: flex-start;
+  }
+  .browser-app .connect-art {
+    display: none;
+  }
+  .browser-app .connect-copy h1 {
+    font-size: 34px;
+  }
+  .browser-app .connect-copy > p {
+    font-size: 15px;
+    line-height: 1.6;
+  }
+  .browser-app .pwa-bar {
+    padding: 6px 12px;
+  }
+  .browser-app .pwa-bar > span {
+    font-size: 12px;
+  }
+  .browser-app .chat-panel {
+    min-height: 0;
+  }
+}
+@media (max-height: 550px) {
+  .browser-app .connect-art {
+    display: none;
+  }
+}
+
+.web-pairing-icon {
+  display: none;
+}
+@media (max-width: 760px) {
+  .web-pairing-icon {
+    display: block;
+    margin-bottom: 20px;
+  }
+  .browser-app .connect-copy form {
+    margin-top: 22px;
+  }
+  .browser-app input,
+  .browser-app textarea,
+  .browser-app select {
+    font-size: 16px;
+  }
+  .browser-app .connect-copy form > label {
+    font-size: 14px;
+  }
+  .browser-app .connect-copy form details {
+    font-size: 13px;
+  }
+  .browser-app .connect-copy h1 {
+    margin: 12px 0;
+    font-size: 32px;
+  }
+  .browser-app .connect-copy > .pairing-storage-note {
+    font-size: 12px;
+  }
+  .browser-app .connect-foot {
+    font-size: 12px;
+  }
+}

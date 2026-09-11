@@ -77,6 +77,7 @@ export class WorkspaceConnection {
     this.open();
   }
   private open() {
+    this.retry = undefined;
     const config = this.config;
     if (!config) return;
     const generation = ++this.generation;
@@ -240,13 +241,16 @@ export class WorkspaceConnection {
           type: "connection",
           state: "reconnecting",
           route: this.route,
-          message: this.remote
-            ? "Local host unavailable. Trying the remote connection…"
-            : "Workspace unavailable. Retrying the connection…",
+          message:
+            this.remote && config.routePreference !== "remote" && !remote
+              ? "Local host unavailable. Trying the remote connection…"
+              : "Workspace unavailable. Retrying the connection…",
         });
         this.retry = setTimeout(
           () => this.open(),
-          this.remote ? 100 : Math.min(8000, 700 * 2 ** this.attempts++),
+          this.remote && !remote
+            ? 100
+            : Math.min(8000, 700 * 2 ** this.attempts++),
         );
       },
     };

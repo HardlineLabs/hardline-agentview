@@ -9,6 +9,10 @@ import "@fontsource/manrope/latin-500.css";
 import "@fontsource/manrope/latin-600.css";
 import "./styles.css";
 import "./mobile.css";
+import "../browser/pwa.css";
+import { browser } from "./api";
+import { trackViewport } from "../browser/viewport";
+if (browser) trackViewport();
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <App />
