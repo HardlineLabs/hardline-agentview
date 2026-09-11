@@ -83,6 +83,14 @@ address, credential or shared runtime.
 
 ## Cloudflare Tunnel
 
+Host prefills an empty **Remote endpoint** field with
+`wss://agentview.hardline-labs.com/`. A saved custom endpoint is preserved. Edit
+the field for another host's tunnel or clear it for local-only access, then save
+settings to apply. Opening the form does not change the active configuration;
+an empty field is prefilled again the next time the window loads. The Hardline
+Labs address requires a tunnel routed to that Host; prefilling it does not
+provision a tunnel for another computer.
+
 Remote traffic goes from the client through a dedicated Cloudflare hostname and
 outbound tunnel to the host. The website application does not process these
 messages. Tunnel credentials stay on the host, never in Android or desktop

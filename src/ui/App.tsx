@@ -174,7 +174,11 @@ function HostApp() {
   useEffect(() => {
     void invoke("host.status").then((s) => {
       setStatus(s);
-      setForm(s.settings);
+      setForm({
+        ...s.settings,
+        remoteAddress:
+          s.settings.remoteAddress || "wss://agentview.hardline-labs.com/",
+      });
     });
     return subscribe((e) => {
       if (e.type === "hostStatus") setStatus(e.status);
@@ -282,8 +286,9 @@ function HostApp() {
                   }
                 />
                 <small>
-                  Use your host’s secure tunnel address. Local connections stay
-                  direct.
+                  The Hardline Labs address is prefilled. Use the secure tunnel
+                  address that routes to this Host, or clear it for local-only
+                  access. Save settings to apply.
                   {status?.remoteStatus &&
                   status.remoteStatus !== "Not configured"
                     ? ` Tunnel: ${status.remoteStatus}.`
