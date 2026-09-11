@@ -121,4 +121,9 @@ $shortcut.Arguments = '--role=host'
 $shortcut.WorkingDirectory = $installRoot
 $shortcut.Description = 'Open the current AgentView Host'
 $shortcut.Save()
+$fastLauncher = Join-Path $sourceRoot 'resources\host-launcher.exe'
+if (Test-Path -LiteralPath $fastLauncher) {
+    # Keep the familiar .exe fast as well as the shortcut; current.json selects the version.
+    Copy-Item -LiteralPath $fastLauncher -Destination (Join-Path $installRoot 'AgentView Host.exe') -Force
+}
 Write-Output "AgentView Host $Version is healthy. Installation: $installRoot"

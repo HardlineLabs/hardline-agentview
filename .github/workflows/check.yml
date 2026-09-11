@@ -30,6 +30,9 @@ jobs:
       - run: npm run pwa:smoke
       - run: npm run package:host
       - run: node scripts/package-smoke.mjs
+      - run: node scripts/window-smoke.mjs
+        env:
+          AGENTVIEW_PACKAGED_HOST: out/host/win-unpacked
       - uses: actions/upload-artifact@v4
         with:
           name: windows-host
