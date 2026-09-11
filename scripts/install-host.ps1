@@ -53,11 +53,19 @@ function Stop-InstalledHost {
 }
 $dataRoot = if ($env:AGENTVIEW_DATA_DIR) { $env:AGENTVIEW_DATA_DIR } else { Join-Path $env:APPDATA 'Hardline AgentView Host' }
 $healthPath = Join-Path $dataRoot 'health.json'
+$settingsPath = Join-Path $dataRoot 'settings.json'
+$previousSettings = if (Test-Path -LiteralPath $settingsPath) { Get-Content -Raw -LiteralPath $settingsPath } else { $null }
 $lockPath = Join-Path $installRoot 'updating.lock'
 Set-Content -LiteralPath $lockPath -Value $Version
 try {
     if ($existingTask) { Stop-ScheduledTask -TaskName $taskName }
     Stop-InstalledHost
+    if ($RegisterStartup -and $previousSettings) {
+        # The managed task owns startup; avoid a second version-specific login entry.
+        $managedSettings = $previousSettings | ConvertFrom-Json
+        $managedSettings.autoStart = $false
+        [IO.File]::WriteAllText($settingsPath, ($managedSettings | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
+    }
     $relativeExe = "versions\$Version\AgentView Host.exe"
     @{ version = $Version; executable = $relativeExe; installedAt = [DateTime]::UtcNow.ToString('o') } | ConvertTo-Json | Set-Content -LiteralPath ($pointerPath + '.next') -Encoding UTF8
     Move-Item -LiteralPath ($pointerPath + '.next') -Destination $pointerPath -Force
@@ -77,6 +85,7 @@ try {
 } catch {
     $failure = $_
     Stop-InstalledHost
+    if ($previousSettings) { [IO.File]::WriteAllText($settingsPath, $previousSettings, [Text.UTF8Encoding]::new($false)) }
     if ($previous) {
         $previous | Set-Content -LiteralPath $pointerPath -Encoding UTF8
         $oldExe = [IO.Path]::GetFullPath((Join-Path $installRoot ($previous | ConvertFrom-Json).executable))
@@ -97,6 +106,10 @@ if ($RegisterStartup) {
     $trigger = New-ScheduledTaskTrigger -AtLogOn -User $identity
     $taskSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
     Register-ScheduledTask -TaskName $taskName -Action $action -Principal $taskPrincipal -Trigger $trigger -Settings $taskSettings -Description 'Start AgentView in its signed-in Windows session and recover unexpected exits.' -Force | Out-Null
+    $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+    $runName = 'labs.hardline.agentview.host'
+    $legacy = Get-ItemPropertyValue -LiteralPath $runKey -Name $runName -ErrorAction SilentlyContinue
+    if ($legacy -and $legacy.StartsWith('"' + $installRoot + '\', [StringComparison]::OrdinalIgnoreCase)) { Remove-ItemProperty -LiteralPath $runKey -Name $runName }
     Start-ScheduledTask -TaskName $taskName
 }
 Write-Output "AgentView Host $Version is healthy. Installation: $installRoot"
