@@ -15,6 +15,7 @@
     "host": "electron . --role=host",
     "client": "electron . --role=client",
     "package": "npm run build && node scripts/package.mjs",
+    "package:host": "npm run build && node scripts/package.mjs --host-only",
     "smoke": "node scripts/smoke.mjs",
     "android:sync": "npm run build && node scripts/android-assets.mjs && cap sync android",
     "android:debug": "npm run android:sync && cd android && gradlew.bat assembleDebug",

@@ -704,17 +704,19 @@ function Connect({
               />
             </>
           )}
-          <details>
-            <summary>Use a different host address</summary>
-            <input
-              aria-label="Host address"
-              placeholder={
-                browser ? "wss://your-host.example.com" : "192.168.1.10:43120"
-              }
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-            />
-          </details>
+          {(!browser || code.trim().startsWith("agentview://")) && (
+            <details>
+              <summary>Use a different host address</summary>
+              <input
+                aria-label="Host address"
+                placeholder={
+                  browser ? "wss://your-host.example.com" : "192.168.1.10:43120"
+                }
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+              />
+            </details>
+          )}
           <button
             className="primary"
             disabled={

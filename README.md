@@ -105,6 +105,9 @@ npm run host
 npm run client
 ```
 
+Use `npm run package:host` when shipping only Host and the PWA. Build the browser
+separately with `npm run pwa:build`.
+
 `npm run package` creates `out/host/AgentView Host.exe` and
 `out/client/AgentView.exe`. No installer or administrator privileges are required
 for the apps themselves; enabling the Windows firewall rule requires approval.
