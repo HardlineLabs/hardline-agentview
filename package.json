@@ -1,6 +1,6 @@
 {
   "name": "hardline-agentview",
-  "version": "0.4.2-dev.3",
+  "version": "0.4.2-dev.4",
   "description": "A living workspace for human and agent collaboration",
   "private": true,
   "type": "module",
