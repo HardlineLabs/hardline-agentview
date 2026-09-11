@@ -108,8 +108,17 @@ if ($RegisterStartup) {
     Register-ScheduledTask -TaskName $taskName -Action $action -Principal $taskPrincipal -Trigger $trigger -Settings $taskSettings -Description 'Start AgentView in its signed-in Windows session and recover unexpected exits.' -Force | Out-Null
     $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
     $runName = 'labs.hardline.agentview.host'
-    $legacy = Get-ItemPropertyValue -LiteralPath $runKey -Name $runName -ErrorAction SilentlyContinue
+    $legacy = $null
+    # A previous managed install has already removed this optional legacy value.
+    try { $legacy = Get-ItemPropertyValue -LiteralPath $runKey -Name $runName -ErrorAction Stop } catch { }
     if ($legacy -and $legacy.StartsWith('"' + $installRoot + '\', [StringComparison]::OrdinalIgnoreCase)) { Remove-ItemProperty -LiteralPath $runKey -Name $runName }
     Start-ScheduledTask -TaskName $taskName
 }
+# Keep the visible entry point on the same validated version as managed startup.
+$shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $installRoot 'AgentView Host.lnk'))
+$shortcut.TargetPath = Join-Path $installRoot $relativeExe
+$shortcut.Arguments = '--role=host'
+$shortcut.WorkingDirectory = $installRoot
+$shortcut.Description = 'Open the current AgentView Host'
+$shortcut.Save()
 Write-Output "AgentView Host $Version is healthy. Installation: $installRoot"
