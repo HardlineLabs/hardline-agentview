@@ -96,3 +96,9 @@ Cloudflare quick tunnel to an isolated synthetic vault, validates the origin wit
 its generated CA certificate, and checks both browsers with normal public TLS
 validation. It closes the tunnel and removes the fixture afterward. It does not
 use the developer's running host, vault or agent account.
+
+If the test computer's DNS cannot resolve `trycloudflare.com`, setting
+`AGENTVIEW_TEST_DNS=1.1.1.1` enables a Chromium-only diagnostic run. It resolves
+only the temporary test hostname through that resolver and maps it inside the
+test browser; public hostname/certificate checks remain enabled. This does not
+change Windows networking or establish a successful public WebKit test.

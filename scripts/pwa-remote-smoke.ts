@@ -4,6 +4,7 @@ import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { setTimeout as delay } from "node:timers/promises";
+import { Resolver } from "node:dns/promises";
 import { chromium, webkit, devices } from "playwright";
 import { HostService } from "../src/host/service";
 
@@ -27,6 +28,7 @@ host.codex.start = async () => {
 };
 host.codex.rpc = async () => ({ data: [] });
 let tunnel: ChildProcess | undefined;
+let tunnelLog = "";
 try {
   await host.start();
   const endpoint = await new Promise<string>((resolve, reject) => {
@@ -50,11 +52,12 @@ try {
       ],
       { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] },
     );
-    let log = "";
     const read = (chunk: Buffer) => {
-      log = (log + chunk.toString()).slice(-12000);
-      const match = log.match(/https:\/\/([a-z0-9-]+\.trycloudflare\.com)/);
-      if (match && log.includes("Registered tunnel connection")) {
+      tunnelLog = (tunnelLog + chunk.toString()).slice(-12000);
+      const match = tunnelLog.match(
+        /https:\/\/([a-z0-9-]+\.trycloudflare\.com)/,
+      );
+      if (match && tunnelLog.includes("Registered tunnel connection")) {
         clearTimeout(timeout);
         resolve(`wss://${match[1]}/`);
       }
@@ -70,24 +73,48 @@ try {
       reject(new Error("Test tunnel exited before becoming ready."));
     });
   });
-  // Quick-tunnel DNS and edge routing can lag behind connector registration.
-  const deadline = Date.now() + 30_000;
-  while (true) {
-    const response = await fetch(endpoint.replace("wss:", "https:"), {
-      signal: AbortSignal.timeout(5000),
-    }).catch(() => undefined);
-    if (response?.status === 404) break;
-    if (Date.now() > deadline)
-      throw new Error("Public test tunnel did not become reachable.");
-    await delay(1000);
+  const resolverAddress = process.env.AGENTVIEW_TEST_DNS;
+  const browserArgs: string[] = [];
+  if (resolverAddress) {
+    const resolver = new Resolver();
+    resolver.setServers([resolverAddress]);
+    const hostname = new URL(endpoint).hostname;
+    const deadline = Date.now() + 45_000;
+    let address: string | undefined;
+    while (!address) {
+      [address] = await resolver.resolve4(hostname).catch(() => []);
+      if (!address && Date.now() > deadline)
+        throw new Error(
+          "Test hostname did not resolve through the requested DNS server.",
+        );
+      if (!address) await delay(2000);
+    }
+    browserArgs.push(`--host-resolver-rules=MAP ${hostname} ${address}`);
+    console.log(
+      "Test DNS override: Chromium only; TLS still validates the public hostname.",
+    );
   }
   host.settings.remoteAddress = endpoint;
-  for (const engine of [chromium, webkit]) {
-    const browser = await engine.launch();
+  for (const engine of resolverAddress ? [chromium] : [chromium, webkit]) {
+    const browser = await engine.launch({ args: browserArgs });
     try {
       // Normal public TLS validation on both the Site and the WSS endpoint.
       const context = await browser.newContext({ ...devices["iPhone 13"] });
       const page = await context.newPage();
+      // Registration may precede DNS and edge readiness. Probe in the browser
+      // that will make the connection, using its normal TLS verification.
+      const deadline = Date.now() + 30_000;
+      while (true) {
+        const response = await page
+          .goto(endpoint.replace("wss:", "https:"), { timeout: 5000 })
+          .catch(() => undefined);
+        if (response?.status() === 404) break;
+        if (Date.now() > deadline)
+          throw new Error(
+            `Public test tunnel is not reachable in ${engine.name()}.\n${tunnelLog.slice(-2000)}`,
+          );
+        await delay(1000);
+      }
       const errors: string[] = [];
       page.on("requestfailed", (request) =>
         console.error(
@@ -122,6 +149,19 @@ try {
       await page
         .locator(".connection-pill:not(.lost)")
         .waitFor({ timeout: 35_000 });
+      if (engine === chromium) {
+        await page.evaluate(() => navigator.serviceWorker.ready);
+        await page.waitForFunction(() =>
+          Boolean(navigator.serviceWorker.controller),
+        );
+        await context.setOffline(true);
+        await page.reload();
+        await page.locator(".browser-app").waitFor();
+        await context.setOffline(false);
+        await page
+          .locator(".connection-pill:not(.lost)")
+          .waitFor({ timeout: 35000 });
+      }
       await page.evaluate(() =>
         window.agentview!.invoke("connection.disconnect"),
       );
