@@ -44,7 +44,7 @@ export function browserBridge(): DesktopBridge {
     const socket = new WebSocket(remoteAddress(address));
     socket.onopen = handlers.open;
     socket.onmessage = (event) => {
-      if (typeof event.data !== "string" || event.data.length > 1_048_576) {
+      if (typeof event.data !== "string" || event.data.length > 64_000_000) {
         socket.close(1009);
         return;
       }

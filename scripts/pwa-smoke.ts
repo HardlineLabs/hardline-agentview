@@ -66,6 +66,10 @@ async function makeHost(name: string) {
     path.join(vault, "Ideas.md"),
     `---\ntype: reference\ndomain: agentview\nstatus: current\n---\n# ${name} ideas\n\nA private note for ${name}.\n`,
   );
+  await writeFile(
+    path.join(vault, "Large.md"),
+    "# Large note\n" + "Workspace content. ".repeat(35000),
+  );
   const host = new HostService(
     { vaultPath: vault, port: 0, codexPath: "", autoStart: false },
     path.join(root, "host"),
@@ -270,6 +274,13 @@ try {
           .click();
         await pair(page, first);
       }
+      const largeNote = await page.evaluate(() =>
+        window.agentview!.invoke("note.read", { id: "Large.md" }),
+      );
+      assert.ok(
+        largeNote.body.length > 600_000,
+        "Large encrypted responses match native client limits",
+      );
       await page.getByLabel("Message your agent").fill("A draft worth keeping");
       await page.locator(".mobile-live").click();
       await page
@@ -325,6 +336,47 @@ try {
         await page.getByLabel("Message your agent").inputValue(),
         "Keep this conversation draft",
       );
+      for (const size of [
+        { width: 320, height: 667 },
+        { width: 932, height: 430 },
+        { width: 1440, height: 900 },
+      ]) {
+        await page.setViewportSize(size);
+        await page.waitForFunction(
+          (height) =>
+            Math.abs(
+              document.querySelector(".browser-app")!.getBoundingClientRect()
+                .height - height,
+            ) < 2,
+          size.height,
+        );
+        assert.ok(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth,
+          ),
+          `No overflow at ${size.width}px`,
+        );
+        const composer = await page
+          .getByLabel("Message your agent")
+          .boundingBox();
+        assert.ok(
+          composer && composer.y + composer.height <= size.height,
+          `Composer stays visible at ${size.width}px`,
+        );
+        const send = await page
+          .getByTitle("Send message", { exact: true })
+          .boundingBox();
+        assert.ok(
+          send && send.y + send.height <= size.height,
+          `Send stays visible at ${size.width}px: ${JSON.stringify(send)}`,
+        );
+        if (captures)
+          await page.screenshot({
+            animations: "disabled",
+            path: path.join(captures, `${engine.name()}-${size.width}.png`),
+          });
+      }
+      await page.setViewportSize({ width: 390, height: 844 });
       const rawStorage = await page.evaluate(async () => {
         const db = await new Promise<IDBDatabase>((resolve) => {
           const r = indexedDB.open("agentview-device");
