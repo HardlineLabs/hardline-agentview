@@ -44,6 +44,8 @@ installer registers an interactive task for the same user with Highest privilege
 future sign-ins do not require a fresh UAC prompt for that task. Do not use another
 administrator account, which would select a different Codex sign-in and data.
 Use the managed task instead of the portable app's separate start-at-sign-in toggle.
+The installer updates **AgentView Host.lnk** in the installation folder to open
+the same validated version used by the startup task.
 The installer clears that toggle and removes this installation's older login entry
 when registering managed startup, preventing two host versions from racing at sign-in.
 

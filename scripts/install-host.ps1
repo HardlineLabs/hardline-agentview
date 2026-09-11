@@ -112,4 +112,11 @@ if ($RegisterStartup) {
     if ($legacy -and $legacy.StartsWith('"' + $installRoot + '\', [StringComparison]::OrdinalIgnoreCase)) { Remove-ItemProperty -LiteralPath $runKey -Name $runName }
     Start-ScheduledTask -TaskName $taskName
 }
+# Keep the visible entry point on the same validated version as managed startup.
+$shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $installRoot 'AgentView Host.lnk'))
+$shortcut.TargetPath = Join-Path $installRoot $relativeExe
+$shortcut.Arguments = '--role=host'
+$shortcut.WorkingDirectory = $installRoot
+$shortcut.Description = 'Open the current AgentView Host'
+$shortcut.Save()
 Write-Output "AgentView Host $Version is healthy. Installation: $installRoot"
