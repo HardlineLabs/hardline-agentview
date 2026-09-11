@@ -9,6 +9,7 @@ import { DatabaseSync } from "node:sqlite";
 import { randomInt, randomBytes } from "node:crypto";
 import { PairingRegistry, type Sql } from "../src/pairing/registry";
 import { HostService, encodeConnection } from "../src/host/service";
+import { installViewportFixture, layoutSmoke } from "./pwa-layout-smoke";
 
 // Real host TLS, pairing, encryption, storage and browser UI; only the agent
 // runtime is a deterministic fixture. Never uses the developer's vault/account.
@@ -218,6 +219,19 @@ async function makeHost(name: string) {
                 type: "agentMessage",
                 text: `Welcome to ${name}. Your workspace stays on this computer.`,
               },
+              {
+                id: "long-message",
+                type: "agentMessage",
+                text:
+                  Array.from(
+                    { length: 35 },
+                    (_, i) =>
+                      `Paragraph ${i + 1}. A long conversation should scroll only inside the message panel.`,
+                  ).join("\n\n") +
+                  "\n\n```text\n" +
+                  "wide-output-".repeat(100) +
+                  "\n```",
+              },
             ],
           },
         ],
@@ -389,6 +403,8 @@ try {
     });
     await context.addInitScript("globalThis.__name = (value) => value");
     const page = await context.newPage();
+    page.setDefaultTimeout(15_000);
+    await installViewportFixture(page);
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
     try {
@@ -568,6 +584,7 @@ try {
         ),
         "No horizontal overflow",
       );
+      await layoutSmoke(page, engine.name(), captures);
       await context.setOffline(true);
       await page.locator(".connection-pill.lost").waitFor();
       await context.setOffline(false);

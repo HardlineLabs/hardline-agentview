@@ -84,6 +84,21 @@ workspace files are omitted. Tapping a notification opens its conversation.
 The PC and network Host must be online. Delivery is best effort; inbox/history
 remain available without push. **Disable notifications** removes this subscription.
 
+## Screen, scrolling and keyboard
+
+The browser shell fills the visible screen, including in Home Screen mode, with
+space for the iPhone's notch and home indicator. Chat, the conversation drawer and
+dialogs scroll within their own boundaries. Reaching the end of a conversation
+does not scroll the app into blank space; code blocks still allow sideways reading
+without trapping vertical chat scrolling.
+
+Opening or closing the keyboard resizes the shell and its dialogs using the visual
+viewport. Focus transitions are followed briefly to handle delayed Safari geometry
+updates before the first keystroke. Short screens use compact controls. When reading
+the latest messages, chat stays at the bottom as the keyboard changes; when reading
+older messages, it keeps that position. Long drafts and attachment lists scroll
+within bounded composer areas. Pinch zoom remains available.
+
 ## Updates
 
 The app checks for updates when opened, returned to the foreground, brought online
@@ -107,7 +122,7 @@ npm run pwa:smoke
 `npm run pwa:dev` serves the browser target locally. `pwa:build` emits only public
 client assets into `dist/client`, including a content-versioned service worker and
 install icons. Cloudflare Workers Static Assets serves the `hardline-agentview`
-application at `app.hardline-labs.com`; source remains in this private repository.
+application at `app.hardline-labs.com`; source is in this public repository.
 To publish, build and validate the intended revision, sign into Wrangler for the
 owning Cloudflare account, then run `npx wrangler deploy`. The tracked
 `wrangler.jsonc` publishes the complete static build plus the six-digit pairing
@@ -125,7 +140,14 @@ The smoke check uses ephemeral vaults and actual host TLS/encrypted WebSockets;
 only the agent runtime is a deterministic fixture. Its certificate exemption is
 restricted to the local fixture, never production. Chromium and WebKit checks
 cover pairing, host separation, graph/chat interaction, reconnect, saved-device
-recovery and revocation. Chromium additionally exercises camera-frame QR decoding,
+recovery and revocation. Layout stress checks exercise empty-input focus before
+typing, delayed visual-viewport geometry, scrolling past both ends of long and
+empty chats, wide code blocks, long drafts, repeated drawer/settings/brain changes,
+search, small screens and rotation. Synthetic keyboard geometry changes separately
+from the layout viewport; it is a regression test, not a real iOS keyboard.
+Chromium uses wheel input to check scroll routing; mobile WebKit checks DOM scroll
+geometry because Playwright cannot inject wheel input in that mode.
+Chromium additionally exercises camera-frame QR decoding,
 offline shell and update/draft recovery. These do not establish physical iPhone
 camera, keyboard, installation or cellular behavior; verify those on an iPhone.
 
