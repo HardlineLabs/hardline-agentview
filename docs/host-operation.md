@@ -142,3 +142,9 @@ outside-workspace file write, checks unrestricted access with `on-request` on
 start and resume and zero approval requests for that routine write,
 then verifies persisted history and resume from another app-server. It consumes
 account usage and deletes only its newly created test conversation and directory.
+
+After installation, set `AGENTVIEW_LIVE_TEST=1` and `AGENTVIEW_DATA_DIR` to the
+installed Host data directory, then run `npx tsx scripts/installed-permissions-smoke.ts`.
+With Full access selected and an existing paired client, this creates one no-tool
+test turn through the running Host and checks its recorded approval/sandbox policy.
+It removes only that test conversation; existing agents and pairings are preserved.
