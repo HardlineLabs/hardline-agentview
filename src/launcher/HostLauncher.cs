@@ -21,7 +21,8 @@ internal static class HostLauncher
     {
         try
         {
-            string root = AppDomain.CurrentDomain.BaseDirectory;
+            // Normalize DOS short-name aliases on both sides of the containment check.
+            string root = Path.GetFullPath(AppDomain.CurrentDomain.BaseDirectory);
             Installation installation;
             // Windows PowerShell can write a UTF-8 BOM; normalize it before JSON parsing.
             using (var stream = new MemoryStream(Encoding.UTF8.GetBytes(File.ReadAllText(Path.Combine(root, "current.json")))))
@@ -30,7 +31,7 @@ internal static class HostLauncher
                 throw new InvalidDataException("The installed Host version is missing.");
             string target = Path.GetFullPath(Path.Combine(root, installation.Executable));
             if (!target.StartsWith(root, StringComparison.OrdinalIgnoreCase) ||
-                String.Equals(target, Application.ExecutablePath, StringComparison.OrdinalIgnoreCase) ||
+                String.Equals(target, Path.GetFullPath(Application.ExecutablePath), StringComparison.OrdinalIgnoreCase) ||
                 !File.Exists(target))
                 throw new InvalidDataException("The installed Host executable could not be found.");
             Process.Start(new ProcessStartInfo(target)

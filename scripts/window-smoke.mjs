@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, execFile } from "node:child_process";
+import { promisify } from "node:util";
 import {
   mkdtemp,
   mkdir,
@@ -67,6 +68,21 @@ try {
       );
       launcher = path.join(install, "AgentView Host.exe");
       await copyFile(source, launcher);
+      // Windows runner/user Temp paths can contain DOS short-name aliases.
+      const shortPath = await promisify(execFile)(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-NonInteractive",
+          "-Command",
+          "(New-Object -ComObject Scripting.FileSystemObject).GetFile($env:AGENTVIEW_TEST_LAUNCHER).ShortPath",
+        ],
+        {
+          windowsHide: true,
+          env: { ...env, AGENTVIEW_TEST_LAUNCHER: launcher },
+        },
+      );
+      launcher = shortPath.stdout.trim();
       launchArgs = [];
     }
   }
