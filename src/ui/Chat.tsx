@@ -322,6 +322,17 @@ export function Chat(props: Props) {
     if (follow.current && scroll.current)
       scroll.current.scrollTop = scroll.current.scrollHeight;
   }, [props.page, sending]);
+  useEffect(() => {
+    if (!browser || !scroll.current) return;
+    const panel = scroll.current;
+    const observer = new ResizeObserver(() => {
+      // Keep the latest message above the keyboard, unless reading history.
+      if (follow.current && panel.clientHeight)
+        panel.scrollTop = panel.scrollHeight;
+    });
+    observer.observe(panel);
+    return () => observer.disconnect();
+  }, []);
   const send = async (onboardingText?: string) => {
     const outgoingText = onboardingText ?? text;
     if (
@@ -377,7 +388,14 @@ export function Chat(props: Props) {
       props.onError(e.message);
     } finally {
       setSending(false);
-      input.current?.focus();
+      if (!browser) input.current?.focus();
+      else if (
+        currentChat.current === draftId &&
+        input.current
+          ?.closest(".composer-area")
+          ?.contains(document.activeElement)
+      )
+        input.current.focus({ preventScroll: true });
     }
   };
   const upload = async (files: FileList | null) => {
