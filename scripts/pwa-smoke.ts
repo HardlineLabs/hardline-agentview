@@ -25,6 +25,10 @@ const types: Record<string, string> = {
 };
 const server = createServer(async (req, res) => {
   const url = new URL(req.url!, "http://localhost");
+  if (url.pathname === "/index.html") {
+    res.writeHead(308, { Location: "/" }).end();
+    return;
+  }
   const file = path.resolve(
     "dist/client",
     "." + (url.pathname === "/" ? "/index.html" : url.pathname),
