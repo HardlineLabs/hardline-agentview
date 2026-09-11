@@ -87,6 +87,8 @@ async function makeHost(name: string) {
     createdAt: Date.now() / 1000,
     status: { type: "idle" },
   };
+  const fixtureThreads = new Map<string, any>([[thread.id, thread]]);
+  const fixtureTurns = new Map<string, any[]>();
   host.codex.start = async () => {
     host.codex.ready = true;
   };
@@ -106,11 +108,76 @@ async function makeHost(name: string) {
         ],
       };
     if (method === "thread/list")
-      return { data: params?.archived ? [] : [thread] };
-    if (method === "thread/read") {
-      assert.equal(params.threadId, thread.id);
-      return { thread };
+      return {
+        data: [...fixtureThreads.values()].filter(
+          (t) => Boolean(t.archived) === Boolean(params?.archived),
+        ),
+      };
+    if (method === "thread/start") {
+      const created = {
+        ...thread,
+        id: crypto.randomUUID(),
+        name: "New fixture",
+        preview: "",
+        ephemeral: false,
+      };
+      fixtureThreads.set(created.id, created);
+      fixtureTurns.set(created.id, []);
+      return { thread: created };
     }
+    if (method === "thread/name/set") {
+      fixtureThreads.get(params.threadId).name = params.name;
+      return {};
+    }
+    if (method === "thread/archive" || method === "thread/unarchive") {
+      fixtureThreads.get(params.threadId).archived =
+        method === "thread/archive";
+      return {};
+    }
+    if (method === "thread/delete") {
+      fixtureThreads.delete(params.threadId);
+      return {};
+    }
+    if (method === "turn/start") {
+      const turn = {
+        id: crypto.randomUUID(),
+        status: "inProgress",
+        items: [
+          {
+            id: crypto.randomUUID(),
+            type: "userMessage",
+            content: params.input,
+          },
+        ],
+      };
+      fixtureTurns.set(params.threadId, [
+        ...(fixtureTurns.get(params.threadId) || []),
+        turn,
+      ]);
+      setTimeout(() => {
+        turn.status = "completed";
+        (turn.items as any[]).push({
+          id: crypto.randomUUID(),
+          type: "agentMessage",
+          text: params.input.some((i: any) => i.type === "localImage")
+            ? "Image received by the host runtime."
+            : "Onboarding received by the host runtime.",
+        });
+        host.codex.emit("notification", {
+          method: "turn/completed",
+          params: { threadId: params.threadId, turn },
+        });
+      }, 150);
+      return { turn };
+    }
+    if (method === "thread/read") {
+      return { thread: fixtureThreads.get(params.threadId) };
+    }
+    if (method === "thread/turns/list" && fixtureTurns.has(params.threadId))
+      return {
+        data: [...fixtureTurns.get(params.threadId)!].reverse(),
+        nextCursor: null,
+      };
     if (method === "thread/turns/list")
       return {
         data: [
@@ -165,6 +232,111 @@ async function disconnect(page: Page) {
   await page.getByRole("button", { name: "Workspace settings" }).click();
   await page.getByRole("button", { name: "Disconnect & change host" }).click();
   await page.getByLabel("Connection key").waitFor();
+}
+async function expandedWorkspace(page: Page, engine: string) {
+  await page
+    .getByRole("button", { name: "Open conversations", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Workspace settings", exact: true })
+    .click();
+  await page.getByLabel("Default agent permissions").selectOption("full");
+  await page.getByRole("status").filter({ hasText: "Default saved" }).waitFor();
+  await page.getByRole("button", { name: "Onboarding", exact: true }).click();
+  await page
+    .getByLabel("Default onboarding instruction")
+    .fill("Read the workspace guide and summarize the product.");
+  await page
+    .getByRole("button", { name: "Save onboarding", exact: true })
+    .click();
+  await page
+    .getByText("Onboarding instruction saved.", { exact: true })
+    .waitFor();
+  if (captures)
+    await page.screenshot({
+      path: path.join(captures, `${engine}-onboarding.png`),
+    });
+  await page.getByTitle("Close settings", { exact: true }).click();
+  await page.getByTitle("New conversation", { exact: true }).click();
+  await page
+    .getByRole("button", { name: "Onboard agent", exact: true })
+    .click();
+  await page
+    .getByText("Onboarding received by the host runtime.", { exact: true })
+    .waitFor();
+  assert.equal(
+    await page
+      .getByRole("button", { name: "Onboard agent", exact: true })
+      .count(),
+    0,
+  );
+  await page.getByRole("button", { name: "Rename", exact: true }).click();
+  await page.getByLabel("Conversation name").fill(`${engine} renamed chat`);
+  await page.getByRole("button", { name: "Save name", exact: true }).click();
+  await page
+    .locator(".chat-heading h3")
+    .filter({ hasText: `${engine} renamed chat` })
+    .waitFor();
+  await page.getByRole("button", { name: "Recovery", exact: true }).click();
+  await page.getByText("Saved in the host runtime", { exact: true }).waitFor();
+  await page
+    .locator(".recovery-card")
+    .getByRole("button", { name: "Close", exact: true })
+    .click();
+  await page
+    .getByLabel("Attach files or images", { exact: true })
+    .setInputFiles("assets/icon.png");
+  await page.waitForTimeout(1200);
+  await page.locator(".message-attachments img").waitFor();
+  await page.getByLabel("Message your agent").fill("Inspect this image");
+  // Flush encrypted drafts before simulating a closed/reopened application.
+  await page.waitForTimeout(250);
+  await page.reload();
+  await page.locator(".message-attachments img").waitFor();
+  assert.equal(
+    await page.getByLabel("Message your agent").inputValue(),
+    "Inspect this image",
+  );
+  await page.getByTitle("Send message", { exact: true }).click();
+  await page
+    .getByText("Image received by the host runtime.", { exact: true })
+    .waitFor();
+  if (captures)
+    await page.screenshot({
+      path: path.join(captures, `${engine}-image-chat.png`),
+    });
+  await page
+    .getByRole("button", { name: "Open conversations", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Select conversations", exact: true })
+    .click();
+  await page
+    .locator(".bulk-list label")
+    .filter({ hasText: `${engine} renamed chat` })
+    .getByRole("checkbox")
+    .check();
+  await page.getByRole("button", { name: "Archive (1)", exact: true }).click();
+  await page
+    .getByRole("alertdialog", { name: "Confirm bulk action" })
+    .getByRole("button", { name: "Confirm", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Open conversations", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Archived", exact: true }).click();
+  await page
+    .locator(".thread-list > button")
+    .filter({ hasText: `${engine} renamed chat` })
+    .waitFor();
+  await page.getByRole("button", { name: "Chats", exact: true }).click();
+  await page
+    .locator(".thread-list > button")
+    .filter({ hasText: "First conversation" })
+    .click();
+  await page
+    .getByLabel("Message your agent")
+    .fill("Keep this conversation draft");
 }
 try {
   for (const engine of [chromium, webkit]) {
@@ -402,6 +574,7 @@ try {
       });
       assert.equal(rawStorage.sealed, true);
       assert.ok(!rawStorage.plain.includes("secret"));
+      await expandedWorkspace(page, engine.name());
       if (engine === chromium) {
         await page.evaluate(() => navigator.serviceWorker.ready);
         await page.waitForFunction(() =>
@@ -476,6 +649,10 @@ try {
         `${engine.name()}: pairing, validation, encryption, graph, chat, reconnect, isolation, revocation${engine === chromium ? ", offline shell and draft-safe update" : ""} passed`,
       );
     } catch (error) {
+      console.error(
+        "UI state",
+        (await page.locator("body").innerText()).slice(-5000),
+      );
       console.error(
         engine.name(),
         await page

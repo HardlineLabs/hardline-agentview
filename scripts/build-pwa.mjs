@@ -63,6 +63,16 @@ const CACHE = 'agentview-${version}';
 const ASSETS = ${JSON.stringify(assets)};
 self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS))));
 self.addEventListener('message', event => { if (event.data?.type === 'ACTIVATE_UPDATE') self.skipWaiting(); });
+self.addEventListener('push', event => {
+  let notice = {}; try { notice = event.data.json(); } catch {}
+  event.waitUntil(self.registration.showNotification('AgentView', { body: notice.title || 'Your workspace has an update', icon: '/icons/icon-192.png', tag: notice.threadId || 'agentview', data: { threadId: notice.threadId } }));
+});
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const id = event.notification.data?.threadId;
+  const url = new URL(id ? '/#thread=' + encodeURIComponent(id) : '/', self.location.origin).href;
+  event.waitUntil((async () => { const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true }); for (const client of clients) { if (new URL(client.url).origin === self.location.origin) { await client.navigate(url); return client.focus(); } } return self.clients.openWindow(url); })());
+});
 self.addEventListener('activate', event => event.waitUntil((async () => {
   // Keep the preceding build available to tabs that have not opted into reloading.
   const keys = (await caches.keys()).filter(key => key.startsWith('agentview-'));

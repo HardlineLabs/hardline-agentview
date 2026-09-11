@@ -12,6 +12,14 @@ await build({
   sourcemap: true,
 });
 await build({
+  entryPoints: ["src/host/runtime.ts"],
+  bundle: true,
+  platform: "node",
+  target: "node22",
+  format: "cjs",
+  outfile: "dist/electron/runtime.cjs",
+});
+await build({
   entryPoints: ["src/electron/preload.ts"],
   bundle: true,
   platform: "node",

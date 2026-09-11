@@ -9,6 +9,7 @@ export default defineConfig(({ mode }) => ({
             name: "agentview-pwa-html",
             transformIndexHtml(html: string) {
               return html
+                .replace("img-src 'self' data:", "img-src 'self' data: blob:")
                 .replace("connect-src 'self'", "connect-src 'self' wss:")
                 .replace(
                   "object-src 'none'",
