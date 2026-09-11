@@ -18,6 +18,7 @@ import { encodeConnection, remoteAddress } from "../shared/pairing";
 import { ClientConnection } from "./connection";
 import { enableNetworkAccess, networkAccessEnabled } from "./firewall";
 import type { HostSettings, AppEvent, HostStatus } from "../shared/types";
+import { saveState } from "../host/state";
 
 const role =
   process.argv.includes("--role=host") ||
@@ -75,6 +76,17 @@ if (!app.requestSingleInstanceLock()) {
       notes: 0,
       agentReady: false,
     };
+  const health = () =>
+    role === "host"
+      ? saveState(path.join(dataDir, "health.json"), {
+          version: app.getVersion(),
+          pid: process.pid,
+          running: Boolean(host?.status().running),
+          agentReady: Boolean(host?.codex.ready),
+          intentionalQuit: quitting,
+          checkedAt: Date.now(),
+        }).catch(() => {})
+      : Promise.resolve();
   async function startHost() {
     if (changing) throw new Error("Host setup is already in progress.");
     changing = true;
@@ -84,9 +96,10 @@ if (!app.requestSingleInstanceLock()) {
       hostError = "";
       const next = new HostService(settings, dataDir);
       host = next;
-      next.on("status", () =>
-        emit({ type: "hostStatus", status: hostStatus() }),
-      );
+      next.on("status", () => {
+        emit({ type: "hostStatus", status: hostStatus() });
+        void health();
+      });
       await next.start();
     } catch (e: any) {
       hostError = e.message;
@@ -168,7 +181,9 @@ if (!app.requestSingleInstanceLock()) {
     tray.on("double-click", showWindow);
   }
   client.on("event", emit);
-  app.on("second-instance", showWindow);
+  app.on("second-instance", (_event, args) => {
+    if (!args.includes("--hidden")) showWindow();
+  });
   ipcMain.on("agentview:window", (_event, action) => {
     if (action === "minimize") window?.minimize();
     if (action === "maximize") {
@@ -186,6 +201,13 @@ if (!app.requestSingleInstanceLock()) {
         return {};
       }
       if (role === "host") {
+        if (host?.features.supports(method)) return host.handle(method, params);
+        if (method === "host.stopRuntime") {
+          if (!host?.codex.persistent)
+            throw new Error("No independent runtime is running.");
+          await host.codex.rpc("runtime/shutdown");
+          return {};
+        }
         if (method === "host.networkStatus")
           return networkAccessEnabled(settings.port);
         if (method === "host.networkAllow") {
@@ -329,6 +351,7 @@ if (!app.requestSingleInstanceLock()) {
     }
     showWindow();
     if (role === "host") void startHost();
+    if (role === "host") setInterval(() => void health(), 5000).unref();
   });
   app.on("window-all-closed", () => {
     if (role !== "host") app.quit();
@@ -339,7 +362,8 @@ if (!app.requestSingleInstanceLock()) {
       if (cleaningUp) return;
       cleaningUp = true;
       quitting = true;
-      void host.stop().finally(() => {
+      void host.stop().finally(async () => {
+        await health();
         host = null;
         app.quit();
       });

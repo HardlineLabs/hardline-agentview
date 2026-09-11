@@ -38,19 +38,23 @@ the shared WorkspaceConnection state machine and typed interface bridge.
 Events carry graph snapshots, activity, conversation deltas and approvals. The
 host sends heartbeats. Clients retry with backoff and receive a fresh snapshot.
 The host keeps running when a viewer disconnects. Mutations are deduplicated by
-device and request identifier within a host process; reusing an identifier with a
-different action is rejected. Clients do not resend uncertain actions.
+device and request identifier. Host 0.4 adds durable receipts for expanded-client
+mutations; reusing an identifier with a different action is rejected. Clients do
+not resend uncertain actions. [Host API](api.md) owns the capability contracts.
 
 Host settings and TLS identity are stored in the current Windows user's application
 data directory. Start-at-sign-in is optional. Closing the host window hides it;
-Quit Host in the tray ends the service and its agent process. The laptop must
+Quit Host in the tray ends the network service; the packaged independent runtime
+keeps active agent work alive. [Host operation](host-operation.md) owns the worker,
+managed updater, privilege and shutdown contracts. The computer must
 remain awake and signed in; AgentView does not override power or lid settings.
 
 ## Agent integration
 
-The host starts the locally installed `codex app-server --stdio` and uses its
-documented JSON-RPC interface. It uses the existing host sign-in. Available models
-come from `model/list`; conversation history is paginated. Recent live turns are
+The packaged host connects to a detached worker that starts the locally installed
+`codex app-server --stdio` and uses its documented JSON-RPC interface. It uses the
+existing host sign-in. Available models come from `model/list`; history is
+paginated where supported, with legacy stored-history fallback. Recent live turns are
 also folded into memory so early deltas remain visible before logs reach disk.
 
 The catalog exhausts active and archived `thread/list` cursors with every local
@@ -94,7 +98,8 @@ is rechecked on monitor changes. `requestAnimationFrame` follows display timing;
 agent speed and zoom interpolation use elapsed time. The layout simulation settles
 instead of continually nudging text. Connections extend and animate independently
 of travel. Terminal and Agent workspace stations give untargeted work a visible,
-clickable destination. Gentle-motion settings pause decorative motion; actual
+clickable destination. In the PWA these stations occupy graph coordinates and
+move with panning and zoom. Gentle-motion settings pause decorative motion; actual
 agent travel remains visible. Smoothness ultimately depends on monitor, GPU and
 OS compositor performance.
 

@@ -11,7 +11,7 @@ for (const role of ["host", "client"]) {
       productName,
       copyright: "Copyright © Hardline Labs",
       directories: { output: `out/${role}` },
-      files: ["dist/**/*", "assets/icon.png", "package.json"],
+      files: ["dist/electron/**/*", "dist/ui/**/*", "assets/icon.png", "package.json"],
       extraMetadata: {
         name:
           role === "host"
@@ -20,6 +20,7 @@ for (const role of ["host", "client"]) {
         productName,
       },
       asar: true,
+      asarUnpack: ["dist/electron/runtime.cjs"],
       npmRebuild: false,
       win: {
         target: ["portable"],

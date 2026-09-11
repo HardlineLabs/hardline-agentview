@@ -232,6 +232,207 @@
 .web-pairing-icon {
   display: none;
 }
+.browser-app .settings-modal {
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+}
+.workspace-tools {
+  border-top: 1px solid #27332f;
+  margin-top: 16px;
+  padding-top: 16px;
+}
+.workspace-tools nav {
+  display: flex;
+  gap: 5px;
+  overflow-x: auto;
+  margin-bottom: 16px;
+}
+.workspace-tools button,
+.bulk-chats button,
+.rename-chat button,
+.recovery-card button,
+.onboard-agent {
+  min-height: 40px;
+  border: 1px solid #30433e;
+  border-radius: 9px;
+  padding: 8px 12px;
+  background: #17221f;
+  color: #d7eee5;
+}
+.workspace-tools button.selected {
+  background: #294b3e;
+  border-color: #82d6b5;
+}
+.workspace-tools > button {
+  margin: 4px;
+}
+.workspace-tools label {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.workspace-tools textarea,
+.workspace-tools select,
+.rename-chat input {
+  width: 100%;
+  background: #101a17;
+  color: #e0ede7;
+  border: 1px solid #30433e;
+  border-radius: 9px;
+  padding: 10px;
+}
+.workspace-tools p {
+  font-size: 13px;
+  color: #9fb4a9;
+  line-height: 1.5;
+}
+.workspace-tools dl {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  font-size: 13px;
+}
+.workspace-tools dd {
+  margin: 0;
+  text-align: right;
+}
+.workspace-tools pre,
+.recovery-card code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  max-height: 250px;
+  overflow: auto;
+}
+.workspace-tools article {
+  padding: 12px 0;
+  border-bottom: 1px solid #27332f;
+}
+.workspace-tools article small {
+  display: block;
+  margin-top: 6px;
+  color: #9fb4a9;
+}
+.file-entry,
+.file-location {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 5px 0;
+}
+.file-entry button:first-child {
+  flex: 1;
+  text-align: left;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.file-preview {
+  margin-top: 12px;
+  padding: 10px;
+  background: #0b1310;
+  border-radius: 10px;
+}
+.file-preview img {
+  display: block;
+  max-width: 100%;
+  margin-top: 10px;
+}
+.bulk-chats {
+  padding: 8px;
+  border-bottom: 1px solid #27332f;
+}
+.bulk-chats button {
+  margin: 2px;
+  font-size: 12px;
+}
+.bulk-list {
+  max-height: 240px;
+  overflow: auto;
+}
+.bulk-list label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 2px;
+  font-size: 13px;
+}
+.bulk-list label input {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+}
+.bulk-list span {
+  overflow-wrap: anywhere;
+}
+.browser-app .chat-management {
+  flex-wrap: wrap;
+}
+.rename-chat,
+.recovery-card {
+  padding: 10px 16px;
+  background: #13201a;
+  font-size: 12px;
+}
+.rename-chat button {
+  margin: 6px 5px 0 0;
+}
+.recovery-card code {
+  display: block;
+  margin: 6px 0;
+}
+.onboard-agent {
+  width: 100%;
+  margin-bottom: 8px;
+  color: #b3ffe1;
+}
+.message-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.message-attachments > div {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  border-radius: 8px;
+  background: #24352c;
+  padding: 5px;
+  max-width: 100%;
+}
+.message-attachments img {
+  width: 46px;
+  height: 46px;
+  border-radius: 5px;
+  object-fit: cover;
+}
+.message-attachments span {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.message-attachments button {
+  padding: 7px;
+  color: #e2f5e9;
+}
+.attach-file {
+  flex: 0 0 auto;
+  color: #b3ffe1;
+  padding: 8px;
+}
+.queue-choice {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  color: #adc5b8;
+  margin-top: 7px;
+}
+.queue-choice input {
+  width: 18px;
+  height: 18px;
+}
 @media (max-width: 760px), (pointer: coarse) and (max-width: 1024px) {
   .web-pairing-icon {
     display: block;
