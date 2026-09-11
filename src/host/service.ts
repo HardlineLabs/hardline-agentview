@@ -1201,6 +1201,7 @@ export class HostService extends EventEmitter {
       throw new Error(
         "Remote access is not configured on this Host. Set its secure remote endpoint and save settings first.",
       );
+    await this.tunnel.ready();
     if (this.pairingToken)
       await pairingRequest("cancel", { token: this.pairingToken }).catch(
         () => {},

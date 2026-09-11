@@ -12,6 +12,15 @@ LAN-only defaults; Windows UTF-8 BOM files are accepted.
 
 ## Opening the Host window
 
+Host 0.4.2-dev.5 preserves the saved connector settings when saving the Host form.
+If connector paths are missing, it can recover this Host's existing managed
+`tunnel.yml` and installed cloudflared, after checking the endpoint, origin port
+and certificate path. It does not create tunnels or alter remote routes.
+Open Host and click **Pair device**: pairing waits up to 25 seconds for the
+managed connector to register, then verifies the public encrypted Host proof
+before publishing a code. Invalid local setup and failed connector startup are
+reported in Host; the remote endpoint URL alone does not configure a connector.
+
 The managed installation's **AgentView Host.exe** is a small launcher that reads
 `current.json` and opens the installed version directly. **AgentView Host.lnk**
 also opens that version. Repeated clicks bring the existing window forward;
@@ -118,6 +127,12 @@ Completion events missed while it is offline remain in Codex history; they are
 not retrospectively delivered as push alerts.
 
 ## Validation
+
+With Host stopped, set `AGENTVIEW_LIVE_TEST=1` and `AGENTVIEW_PACKAGED_HOST` to the
+installed executable, then run `npx tsx scripts/installed-pairing-smoke.ts`.
+This opens Host, clicks Pair without a manual tunnel delay, claims the generated
+code and verifies an authenticated public WSS snapshot. It revokes only its new
+test device and closes Host. Existing devices and conversations are preserved.
 
 `npm run check` and `npm run pwa:smoke` cover permission forwarding, durable
 receipts, file boundaries, onboarding, rename, images, reload recovery and bulk
