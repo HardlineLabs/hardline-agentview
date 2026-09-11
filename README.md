@@ -37,6 +37,14 @@ Context usage, account limits, model/effort selection, approvals, steering and
 conversation controls are shared with the Windows client. See [Android build and
 validation](docs/android.md) for developer setup and signed releases.
 
+## On iPhone and the web
+
+Open the AgentView PWA in Safari and add it to your Home Screen. Open its new icon,
+then scan a fresh invitation from your own Host with Remote access configured.
+The web app shares the Android interface and uses the existing encrypted protocol;
+Host 0.3.1 is compatible. UI updates arrive through the web app without reinstalling.
+See [web installation, updates and validation](docs/pwa.md).
+
 ## On Windows
 
 Drag notes to play with the network, scroll to zoom, and double-click to fit.

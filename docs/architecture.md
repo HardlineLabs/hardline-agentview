@@ -1,6 +1,10 @@
 # Architecture
 
-AgentView has two Windows entry points and an Android client in one TypeScript project. Android bundles the shared React interface in a Capacitor shell with native networking and secure storage.
+AgentView has two Windows entry points, an Android client and an installable PWA
+in one TypeScript project. Android bundles the shared React interface in a Capacitor
+shell with native networking and secure storage. The PWA uses the same interface
+and encrypted protocol through a browser adapter. [Web client](pwa.md) owns its
+installation, device storage, lifecycle and static publishing behavior.
 The host is an Electron tray application. The client is an Electron application
 with a React interface and a Canvas/d3-force knowledge graph. Fonts and visual
 assets are bundled; the client does not need an internet connection to render.
@@ -29,7 +33,8 @@ end-to-end encrypted sessions with per-device credentials. See the authoritative
 Cloudflare setup and operational boundaries.
 
 The desktop main process owns networking; Android uses its native socket plugin.
-Both use the shared WorkspaceConnection state machine and typed interface bridge.
+The PWA uses browser WebSocket with publicly trusted remote TLS. All clients use
+the shared WorkspaceConnection state machine and typed interface bridge.
 Events carry graph snapshots, activity, conversation deltas and approvals. The
 host sends heartbeats. Clients retry with backoff and receive a fresh snapshot.
 The host keeps running when a viewer disconnects. Mutations are deduplicated by
