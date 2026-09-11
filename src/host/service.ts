@@ -35,7 +35,9 @@ import type {
 } from "../shared/types";
 
 export { encodeConnection, decodeConnection } from "../shared/pairing";
-import { encodeConnection } from "../shared/pairing";
+import { encodeConnection, decodeConnection } from "../shared/pairing";
+import { pairingRequest } from "../shared/pairing-code";
+import { checkRemotePairing } from "./remote-pairing";
 import { Devices } from "./devices";
 import { HostTunnel } from "./tunnel";
 import { SecurePeer } from "./secure-peer";
@@ -116,6 +118,8 @@ export class HostService extends EventEmitter {
   private devices: Devices;
   private tunnel = new HostTunnel();
   private invitation?: Connection;
+  private pairingToken?: string;
+  private pairingRequest?: Promise<{ code: string; expiresAt: number }>;
   private fingerprint = "";
   private started = Date.now();
   private error = "";
@@ -1184,6 +1188,39 @@ export class HostService extends EventEmitter {
       code: encodeConnection(this.invitation),
       expiresAt: credential.expiresAt,
     };
+  }
+  createPairingCode(name: string) {
+    return (this.pairingRequest ||= this.publishPairingCode(name).finally(
+      () => {
+        this.pairingRequest = undefined;
+      },
+    ));
+  }
+  private async publishPairingCode(name: string) {
+    if (!this.settings.remoteAddress)
+      throw new Error(
+        "Remote access is not configured on this Host. Set its secure remote endpoint and save settings first.",
+      );
+    if (this.pairingToken)
+      await pairingRequest("cancel", { token: this.pairingToken }).catch(
+        () => {},
+      );
+    const invitation = await this.createInvitation(name);
+    const config = decodeConnection(invitation.code);
+    await checkRemotePairing(config);
+    const token = randomBytes(32).toString("hex");
+    this.pairingToken = token;
+    const result = await pairingRequest("publish", {
+      invitation: invitation.code,
+      token,
+      expiresAt: invitation.expiresAt,
+    });
+    if (
+      !/^\d{6}$/.test(result.code) ||
+      result.expiresAt !== invitation.expiresAt
+    )
+      throw new Error("Pairing service returned an invalid code. Try again.");
+    return { code: String(result.code), expiresAt: Number(result.expiresAt) };
   }
   async revokeDevice(id: string) {
     await this.devices.revoke(id);

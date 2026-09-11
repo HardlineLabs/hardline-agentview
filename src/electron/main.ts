@@ -19,6 +19,7 @@ import { ClientConnection } from "./connection";
 import { enableNetworkAccess, networkAccessEnabled } from "./firewall";
 import type { HostSettings, AppEvent, HostStatus } from "../shared/types";
 import { saveState } from "../host/state";
+import { loadHostSettings } from "../host/settings";
 
 const role =
   process.argv.includes("--role=host") ||
@@ -84,6 +85,10 @@ if (!app.requestSingleInstanceLock()) {
           running: Boolean(host?.status().running),
           agentReady: Boolean(host?.codex.ready),
           intentionalQuit: quitting,
+          error: hostError || host?.status().error || "",
+          port: host?.settings.port,
+          remoteConfigured: Boolean(host?.settings.remoteAddress),
+          remoteStatus: host?.status().remoteStatus,
           checkedAt: Date.now(),
         }).catch(() => {})
       : Promise.resolve();
@@ -171,8 +176,8 @@ if (!app.requestSingleInstanceLock()) {
       Menu.buildFromTemplate([
         { label: "Open AgentView Host", click: showWindow },
         {
-          label: "Copy connection key",
-          click: () => clipboard.writeText(hostStatus().pairingCode),
+          label: "Pair a device",
+          click: showWindow,
         },
         { type: "separator" },
         { label: "Quit host", click: () => app.quit() },
@@ -217,6 +222,8 @@ if (!app.requestSingleInstanceLock()) {
         if (method === "host.status") return hostStatus();
         if (method === "host.invite")
           return host?.createInvitation(String(params.name || "New device"));
+        if (method === "host.pairCode")
+          return host?.createPairingCode(String(params.name || "New device"));
         if (method === "host.revoke") {
           await host?.revokeDevice(String(params.id));
           return hostStatus();
@@ -338,19 +345,14 @@ if (!app.requestSingleInstanceLock()) {
     await fs.mkdir(dataDir, { recursive: true });
     if (role === "host") {
       try {
-        settings = {
-          ...settings,
-          ...JSON.parse(
-            await fs.readFile(path.join(dataDir, "settings.json"), "utf8"),
-          ),
-        };
-      } catch {
-        /* Defaults. */
+        settings = await loadHostSettings(path.join(dataDir, "settings.json"), settings);
+      } catch (error: any) {
+        hostError = `Could not load Host settings: ${error.message}`;
       }
       createTray();
     }
     showWindow();
-    if (role === "host") void startHost();
+    if (role === "host" && !hostError) void startHost();
     if (role === "host") setInterval(() => void health(), 5000).unref();
   });
   app.on("window-all-closed", () => {

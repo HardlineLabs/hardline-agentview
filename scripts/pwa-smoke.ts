@@ -5,6 +5,9 @@ import os from "node:os";
 import path from "node:path";
 import { chromium, webkit, devices, type Page } from "playwright";
 import QRCode from "qrcode";
+import { DatabaseSync } from "node:sqlite";
+import { randomInt, randomBytes } from "node:crypto";
+import { PairingRegistry, type Sql } from "../src/pairing/registry";
 import { HostService, encodeConnection } from "../src/host/service";
 
 // Real host TLS, pairing, encryption, storage and browser UI; only the agent
@@ -14,6 +17,14 @@ const captures = process.env.AGENTVIEW_PWA_CAPTURES;
 if (captures) await mkdir(captures, { recursive: true });
 const hosts: HostService[] = [];
 let updateVersion = false;
+const pairingDb = new DatabaseSync(":memory:");
+const pairingSql: Sql = {
+  exec<T>(query: string, ...values: (string | number | null)[]) {
+    const rows = pairingDb.prepare(query).all(...values) as T[];
+    return { toArray: () => rows };
+  },
+};
+const pairing = new PairingRegistry(pairingSql);
 const types: Record<string, string> = {
   ".html": "text/html",
   ".js": "text/javascript",
@@ -25,6 +36,23 @@ const types: Record<string, string> = {
 };
 const server = createServer(async (req, res) => {
   const url = new URL(req.url!, "http://localhost");
+  if (url.pathname.startsWith("/api/pair/")) {
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    let body = "";
+    for await (const bytes of req) body += bytes;
+    const result = pairing.handle(
+      url.pathname.slice("/api/pair/".length),
+      JSON.parse(body),
+      req.socket.remoteAddress || "fixture",
+    );
+    res
+      .writeHead(result.status, {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store",
+      })
+      .end(JSON.stringify(result.body));
+    return;
+  }
   if (url.pathname === "/index.html") {
     res.writeHead(308, { Location: "/" }).end();
     return;
@@ -216,10 +244,22 @@ const first = await makeHost("First");
 const second = await makeHost("Second");
 async function pair(page: Page, host: HostService) {
   const invitation = await host.createInvitation("PWA fixture");
-  await page.getByLabel("Connection key").fill(invitation.code);
+  const code = randomInt(1_000_000).toString().padStart(6, "0");
+  // Local TLS fixtures intentionally use loopback; public registrations reject it.
+  pairingSql.exec(
+    "INSERT INTO invitations VALUES (?, ?, ?, ?, NULL)",
+    code,
+    invitation.code,
+    randomBytes(32).toString("hex"),
+    invitation.expiresAt!,
+  );
+  await page.getByLabel("Pairing code", { exact: true }).fill(code);
   await page
     .getByRole("button", { name: "Connect to workspace", exact: true })
     .click();
+  await page
+    .getByRole("button", { name: "Finding your workspace…", exact: true })
+    .waitFor();
   await page
     .locator(".connection-pill:not(.lost)")
     .waitFor({ timeout: 20_000 });
@@ -231,7 +271,7 @@ async function disconnect(page: Page) {
     .click();
   await page.getByRole("button", { name: "Workspace settings" }).click();
   await page.getByRole("button", { name: "Disconnect & change host" }).click();
-  await page.getByLabel("Connection key").waitFor();
+  await page.getByLabel("Pairing code", { exact: true }).waitFor();
 }
 async function expandedWorkspace(page: Page, engine: string) {
   await page
@@ -352,8 +392,31 @@ try {
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
     try {
+      const blocked = await context.newPage();
+      await blocked.addInitScript(() => {
+        Object.defineProperty(indexedDB, "open", { value: () => ({}) });
+      });
+      await blocked.goto(url);
+      await blocked.getByLabel("Pairing code", { exact: true }).fill("123456");
+      await blocked
+        .getByRole("button", { name: "Connect to workspace", exact: true })
+        .click();
+      await blocked
+        .getByRole("button", { name: "Finding your workspace…", exact: true })
+        .waitFor();
+      await blocked
+        .getByRole("alert")
+        .filter({ hasText: /Device storage is unavailable/ })
+        .waitFor({ timeout: 12_000 });
+      assert.equal(
+        await blocked
+          .getByRole("button", { name: "Connect to workspace", exact: true })
+          .isEnabled(),
+        true,
+      );
+      await blocked.close();
       await page.goto(url);
-      await page.getByLabel("Connection key").waitFor();
+      await page.getByLabel("Pairing code", { exact: true }).waitFor();
       assert.equal(
         await page.getByRole("button", { name: "LAN", exact: true }).count(),
         0,
@@ -363,6 +426,9 @@ try {
           animations: "disabled",
           path: path.join(captures, `${engine.name()}-start.png`),
         });
+      await page
+        .getByText("Have an older invitation or QR?", { exact: true })
+        .click();
       await page.getByLabel("Connection key").fill("invalid");
       await page
         .getByRole("button", { name: "Connect to workspace", exact: true })
@@ -643,7 +709,7 @@ try {
       );
       await disconnect(page);
       await page.reload();
-      await page.getByLabel("Connection key").waitFor();
+      await page.getByLabel("Pairing code", { exact: true }).waitFor();
       assert.deepEqual(errors, []);
       console.log(
         `${engine.name()}: pairing, validation, encryption, graph, chat, reconnect, isolation, revocation${engine === chromium ? ", offline shell and draft-safe update" : ""} passed`,

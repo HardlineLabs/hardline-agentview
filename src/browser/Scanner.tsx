@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { X, Camera, LoaderCircle } from "lucide-react";
 import jsQR from "jsqr";
+import { sixDigitCode } from "../shared/pairing-code";
 
 export function Scanner({
   onScan,
@@ -30,8 +31,20 @@ export function Scanner({
         const result = jsQR(pixels.data, pixels.width, pixels.height, {
           inversionAttempts: "attemptBoth",
         });
-        if (result?.data.startsWith("agentview://")) {
-          onScan(result.data);
+        let value = result?.data || "";
+        if (value.startsWith("https://app.hardline-labs.com/")) {
+          try {
+            value =
+              sixDigitCode(
+                new URLSearchParams(new URL(value).hash.slice(1)).get("pair") ||
+                  "",
+              ) || "";
+          } catch {
+            value = "";
+          }
+        }
+        if (value.startsWith("agentview://") || sixDigitCode(value)) {
+          onScan(value);
           return;
         }
       }

@@ -4,6 +4,12 @@ Host 0.4 adds saved permission defaults, an independent execution process and a
 managed Windows installation. The iPhone controls are under **Workspace settings**.
 Existing pairings and Codex conversations remain in the same Windows user's data.
 
+Host 0.4.1 adds six-digit iPhone pairing. **Pair device** checks the public endpoint
+and this host's encrypted identity before issuing a code. Agent readiness alone
+does not establish that the network listener or tunnel is reachable. A malformed
+or unreadable settings file now reports a startup error instead of silently using
+LAN-only defaults; Windows UTF-8 BOM files are accepted.
+
 ## Permissions and computer use
 
 Choose **Host → Default agent permissions → Full access** for a dedicated agent

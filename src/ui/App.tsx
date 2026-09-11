@@ -50,6 +50,7 @@ import {
   subscribe,
 } from "./api";
 import QRCode from "qrcode";
+import { sixDigitCode } from "../shared/pairing-code";
 import { applyConversationEvent } from "../shared/conversation";
 import type {
   AppEvent,
@@ -123,29 +124,44 @@ function HostApp() {
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
   const [deviceName, setDeviceName] = useState("My device");
+  const [pairingBusy, setPairingBusy] = useState(false);
   const [invitation, setInvitation] = useState<{
     code: string;
     expiresAt: number;
     qr: string;
+    legacy: boolean;
   }>();
   const [clock, setClock] = useState(Date.now());
   useEffect(() => {
     const timer = setInterval(() => setClock(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
-  const invite = async () => {
+  const invite = async (legacy = false) => {
+    setPairingBusy(true);
+    setError("");
+    setInvitation(undefined);
     try {
-      const result = await invoke("host.invite", { name: deviceName });
+      const result = await invoke(legacy ? "host.invite" : "host.pairCode", {
+        name: deviceName,
+      });
       setInvitation({
         ...result,
-        qr: await QRCode.toDataURL(result.code, {
-          scale: 6,
-          margin: 4,
-          errorCorrectionLevel: "M",
-        }),
+        legacy,
+        qr: await QRCode.toDataURL(
+          legacy
+            ? result.code
+            : `https://app.hardline-labs.com/#pair=${result.code}`,
+          {
+            scale: 6,
+            margin: 4,
+            errorCorrectionLevel: "M",
+          },
+        ),
       });
     } catch (e: any) {
       setError(e.message);
+    } finally {
+      setPairingBusy(false);
     }
   };
   const [networkReady, setNetworkReady] = useState(false);
@@ -330,8 +346,8 @@ function HostApp() {
           </div>
           <p>
             Each paired device has full access to this workspace. Give each
-            phone or computer its own invitation. Scan on Android or paste into
-            AgentView.
+            phone its own six-digit code. Enter it at app.hardline-labs.com from
+            anywhere. Host checks the remote connection before showing a code.
           </p>
           <div className="input-row">
             <input
@@ -342,20 +358,36 @@ function HostApp() {
             />
             <button
               className="secondary"
-              disabled={!status?.running}
+              disabled={!status?.running || pairingBusy}
               onClick={() => void invite()}
             >
-              <Plus size={15} /> Pair device
+              {pairingBusy ? (
+                <LoaderCircle className="spin" size={15} />
+              ) : (
+                <Plus size={15} />
+              )}
+              {pairingBusy ? "Checking remote access…" : "Pair device"}
             </button>
           </div>
           {invitation && (
             <div className="pairing-invitation">
               {clock < invitation.expiresAt ? (
                 <>
-                  <img
-                    src={invitation.qr}
-                    alt="One-time device pairing QR code"
-                  />
+                  {!invitation.legacy && (
+                    <strong
+                      className="pairing-digits"
+                      aria-label="Pairing code"
+                    >
+                      {invitation.code.slice(0, 3)} {invitation.code.slice(3)}
+                    </strong>
+                  )}
+                  <details>
+                    <summary>Optional QR code</summary>
+                    <img
+                      src={invitation.qr}
+                      alt="One-time device pairing QR code"
+                    />
+                  </details>
                   <p>
                     Expires in{" "}
                     {Math.ceil((invitation.expiresAt - clock) / 1000)} seconds ·
@@ -377,9 +409,27 @@ function HostApp() {
             }}
           >
             {copied ? <Check size={17} /> : <Copy size={17} />}{" "}
-            {copied ? "Invitation copied" : "Copy invitation"}
+            {copied
+              ? "Copied"
+              : invitation?.legacy
+                ? "Copy invitation"
+                : "Copy pairing code"}
             <ArrowUpRight size={16} />
           </button>
+          <details className="host-advanced">
+            <summary>Older clients and local pairing</summary>
+            <p>
+              Windows and native Android clients use a full invitation. A
+              LAN-only invitation cannot connect the iPhone web app.
+            </p>
+            <button
+              className="secondary"
+              disabled={!status?.running || pairingBusy}
+              onClick={() => void invite(true)}
+            >
+              Create full invitation
+            </button>
+          </details>
           <div className="host-addresses">
             {status?.addresses.map((a) => (
               <code key={a}>{a.replace("wss://", "")}</code>
@@ -472,13 +522,23 @@ function Connect({
   message: string;
   onConnect: (code: string, address: string, routePreference: string) => void;
 }) {
-  const [code, setCode] = useState("");
+  const [code, setCode] = useState(() =>
+    browser
+      ? sixDigitCode(
+          new URLSearchParams(location.hash.slice(1)).get("pair") || "",
+        ) || ""
+      : "",
+  );
   const [address, setAddress] = useState("");
   const [scanError, setScanError] = useState("");
   const [routePreference, setRoutePreference] = useState(
     browser ? "remote" : "auto",
   );
   const [scanning, setScanning] = useState(false);
+  useEffect(() => {
+    if (browser && new URLSearchParams(location.hash.slice(1)).has("pair"))
+      history.replaceState(null, "", location.pathname + location.search);
+  }, []);
   const connecting = state === "connecting" || state === "reconnecting";
   return (
     <div className="connect-page">
@@ -513,8 +573,8 @@ function Connect({
         <p>
           {browser ? (
             <>
-              Open AgentView Host on your computer, enable Remote access, then
-              choose <strong>Pair device</strong>.
+              Choose <strong>Pair device</strong> in AgentView Host, then enter
+              its six-digit code. Works from anywhere while your PC is online.
             </>
           ) : (
             <>
@@ -527,7 +587,7 @@ function Connect({
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            onConnect(code, address, routePreference);
+            if (!connecting) onConnect(code, address, routePreference);
           }}
         >
           {browser ? (
@@ -562,7 +622,54 @@ function Connect({
               </div>
             </>
           )}
-          {mobile && (
+          {browser && (
+            <>
+              <label htmlFor="pairing-code">Pairing code</label>
+              <input
+                id="pairing-code"
+                className="pairing-code-input"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="000 000"
+                maxLength={7}
+                value={
+                  sixDigitCode(code) || (/^[\d\s-]*$/.test(code) ? code : "")
+                }
+                disabled={connecting}
+                onChange={(e) =>
+                  setCode(e.target.value.replace(/[^\d\s-]/g, ""))
+                }
+              />
+            </>
+          )}
+          {browser && (
+            <details className="legacy-pairing">
+              <summary>Have an older invitation or QR?</summary>
+              <p>
+                Use a fresh invitation containing Remote access. Older LAN-only
+                invitations cannot connect this web app.
+              </p>
+              <textarea
+                aria-label="Connection key"
+                placeholder="Paste a full invitation"
+                value={sixDigitCode(code) ? "" : code}
+                onChange={(e) => setCode(e.target.value)}
+                rows={2}
+              />
+              <button
+                type="button"
+                className="secondary"
+                disabled={connecting}
+                onClick={() => {
+                  setScanError("");
+                  setScanning(true);
+                }}
+              >
+                <QrCode size={20} /> Scan pairing invitation
+              </button>
+            </details>
+          )}
+          {mobile && !browser && (
             <button
               type="button"
               className="scan-pairing secondary"
@@ -585,14 +692,18 @@ function Connect({
               <QrCode size={20} /> Scan pairing invitation
             </button>
           )}
-          <label>Pairing invitation</label>
-          <textarea
-            aria-label="Connection key"
-            placeholder="Paste from AgentView Host"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            rows={2}
-          />
+          {!browser && (
+            <>
+              <label>Pairing invitation</label>
+              <textarea
+                aria-label="Connection key"
+                placeholder="Paste from AgentView Host"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                rows={2}
+              />
+            </>
+          )}
           <details>
             <summary>Use a different host address</summary>
             <input
@@ -604,7 +715,14 @@ function Connect({
               onChange={(e) => setAddress(e.target.value)}
             />
           </details>
-          <button className="primary" disabled={!code.trim() || connecting}>
+          <button
+            className="primary"
+            disabled={
+              !code.trim() ||
+              connecting ||
+              (browser && /^[\d\s-]*$/.test(code) && !sixDigitCode(code))
+            }
+          >
             {connecting ? (
               <LoaderCircle className="spin" size={16} />
             ) : (
@@ -630,7 +748,12 @@ function Connect({
           />
         )}
         {(message || scanError) && (
-          <div className="inline-error">{message || scanError}</div>
+          <div
+            role={connecting ? "status" : "alert"}
+            className={connecting ? "connection-progress" : "inline-error"}
+          >
+            {message || scanError}
+          </div>
         )}
         <div className="connect-foot">
           <span className="status-dot" /> Files stay on your host. Ideas travel
@@ -927,6 +1050,7 @@ function ClientApp() {
   ];
   const activeAgents = snapshot?.agents.filter((a) => a.active) || [];
   const connect = (code: string, address: string, routePreference: string) => {
+    setConnection("connecting");
     setConnectionError("");
     void invoke("connection.connect", { code, address, routePreference }).catch(
       (e) => {

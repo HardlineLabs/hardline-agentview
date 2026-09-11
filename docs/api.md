@@ -5,6 +5,16 @@ are available only after the existing per-device pairing/authentication handshak
 There is no unauthenticated HTTP control API. See [remote access](remote-access.md)
 for the transport. All paired devices have workspace-level authority.
 
+Initial pairing has a separate, bounded directory API at
+`https://app.hardline-labs.com/api/pair`. Its JSON POST routes are `publish`
+(`invitation`, random 256-bit hexadecimal `token`, `expiresAt`), `claim` (six-digit
+`code`, random UUID `claimId`), and `cancel` (`token`). Publish returns `code` and
+`expiresAt`; claim returns the temporary `invitation`. Requests are capped at
+12 KB, rate-limited and uncached. The same claim ID can retry a lost response.
+This API performs no workspace operations. Host's local `host.pairCode` action
+checks the public encrypted endpoint before publishing. Full protocol-3 invitations
+remain available through local `host.invite` for older clients.
+
 Clients inspect `api.capabilities` (its version indicator is also in snapshots) before exposing new
 controls. Version 1 reports Host version, supported method names, limits and event
 epoch. Existing 0.3 clients continue using their original calls; new clients hide
