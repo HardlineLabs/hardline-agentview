@@ -19,6 +19,7 @@ async function main() {
     args: ["--role=host"],
     env,
   });
+  const transport = app.process();
   let client: ClientConnection | undefined;
   let testDevice: string | undefined;
   let page;
@@ -93,11 +94,7 @@ async function main() {
       closing,
       new Promise((resolve) => setTimeout(resolve, 5000)),
     ]);
-    assert.notEqual(
-      app.process().exitCode,
-      null,
-      "Host transport did not exit",
-    );
+    assert.notEqual(transport.exitCode, null, "Host transport did not exit");
   }
 }
 main().then(
