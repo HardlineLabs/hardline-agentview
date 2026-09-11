@@ -3,6 +3,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
+import { setTimeout as delay } from "node:timers/promises";
 import { chromium, webkit, devices } from "playwright";
 import { HostService } from "../src/host/service";
 
@@ -69,6 +70,17 @@ try {
       reject(new Error("Test tunnel exited before becoming ready."));
     });
   });
+  // Quick-tunnel DNS and edge routing can lag behind connector registration.
+  const deadline = Date.now() + 30_000;
+  while (true) {
+    const response = await fetch(endpoint.replace("wss:", "https:"), {
+      signal: AbortSignal.timeout(5000),
+    }).catch(() => undefined);
+    if (response?.status === 404) break;
+    if (Date.now() > deadline)
+      throw new Error("Public test tunnel did not become reachable.");
+    await delay(1000);
+  }
   host.settings.remoteAddress = endpoint;
   for (const engine of [chromium, webkit]) {
     const browser = await engine.launch();
@@ -77,6 +89,13 @@ try {
       const context = await browser.newContext({ ...devices["iPhone 13"] });
       const page = await context.newPage();
       const errors: string[] = [];
+      page.on("requestfailed", (request) =>
+        console.error(
+          engine.name(),
+          request.url(),
+          request.failure()?.errorText,
+        ),
+      );
       page.on("pageerror", (error) => errors.push(error.message));
       await page.goto(url);
       await page.getByLabel("Connection key").waitFor();

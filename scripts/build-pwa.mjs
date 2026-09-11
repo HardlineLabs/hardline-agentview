@@ -50,14 +50,17 @@ const files = (await readdir(output, { recursive: true, withFileTypes: true }))
   )
   .sort();
 const hash = createHash("sha256");
+hash.update(await readFile(new URL(import.meta.url)));
 for (const file of files)
   hash.update(file).update(await readFile(output + file));
 const version = hash.digest("hex").slice(0, 16);
+// Cache the canonical page URL; static hosts redirect /index.html to /.
+const assets = files.map((file) => (file === "/index.html" ? "/" : file));
 await writeFile(
   `${output}/sw.js`,
   `// Generated from the complete immutable client build.
 const CACHE = 'agentview-${version}';
-const ASSETS = ${JSON.stringify(files)};
+const ASSETS = ${JSON.stringify(assets)};
 self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS))));
 self.addEventListener('message', event => { if (event.data?.type === 'ACTIVATE_UPDATE') self.skipWaiting(); });
 self.addEventListener('activate', event => event.waitUntil((async () => {
@@ -70,7 +73,7 @@ self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   if (event.request.method !== 'GET' || url.origin !== self.location.origin) return;
   // Only application files enter the cache. Workspace data travels over encrypted WSS.
-  const asset = event.request.mode === 'navigate' ? '/index.html' : url.pathname;
+  const asset = event.request.mode === 'navigate' ? '/' : url.pathname;
   if (!ASSETS.includes(asset)) return;
   event.respondWith(caches.open(CACHE).then(async cache => (await cache.match(asset)) || fetch(event.request)));
 });
@@ -83,7 +86,7 @@ await writeFile(
   Referrer-Policy: no-referrer
   Permissions-Policy: camera=(self), microphone=(), geolocation=()
   Content-Security-Policy: frame-ancestors 'none'
-/index.html
+/
   Cache-Control: no-cache
 /sw.js
   Cache-Control: no-cache

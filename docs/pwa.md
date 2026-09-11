@@ -75,8 +75,8 @@ Workers & Pages dashboard, select `hardline-agentview` and create a deployment
 with that archive. Upload the complete build, including `_headers`, `sw.js`,
 the manifest, icons and assets. Keep this a static-assets deployment without a
 Worker script or hosted workspace data. No paid plan is required for static asset
-requests. The custom domain is managed in the application's Settings under
-Domains & Routes. Verify the public-path check below after publishing.
+requests. The custom domain is managed in the application's Domains tab.
+Verify the public-path check below after publishing.
 
 Never copy host settings, pairing invitations or tunnel credentials
 into the web output. Browser-origin storage depends on keeping the deployment URL
