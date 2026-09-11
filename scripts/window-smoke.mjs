@@ -63,7 +63,7 @@ try {
       );
       await writeFile(
         path.join(install, "current.json"),
-        JSON.stringify({ executable: "version/AgentView Host.exe" }),
+        "\ufeff" + JSON.stringify({ executable: "version/AgentView Host.exe" }),
       );
       launcher = path.join(install, "AgentView Host.exe");
       await copyFile(source, launcher);

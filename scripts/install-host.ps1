@@ -70,7 +70,8 @@ try {
     @{ version = $Version; executable = $relativeExe; installedAt = [DateTime]::UtcNow.ToString('o') } | ConvertTo-Json | Set-Content -LiteralPath ($pointerPath + '.next') -Encoding UTF8
     Move-Item -LiteralPath ($pointerPath + '.next') -Destination $pointerPath -Force
     $startedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
-    $started = Start-Process -FilePath (Join-Path $installRoot $relativeExe) -ArgumentList @('--role=host', '--hidden') -WindowStyle Hidden -PassThru
+    # Host owns hidden startup. Windows SW_HIDE can suppress the first explicit window open.
+    $started = Start-Process -FilePath (Join-Path $installRoot $relativeExe) -ArgumentList @('--role=host', '--hidden') -WindowStyle Normal -PassThru
     $healthy = $false
     for ($check = 0; $check -lt 30; $check++) {
         Start-Sleep -Seconds 2
@@ -90,7 +91,7 @@ try {
         $previous | Set-Content -LiteralPath $pointerPath -Encoding UTF8
         $oldExe = [IO.Path]::GetFullPath((Join-Path $installRoot ($previous | ConvertFrom-Json).executable))
         Assert-InstalledPath $oldExe
-        Start-Process -FilePath $oldExe -ArgumentList @('--role=host', '--hidden') -WindowStyle Hidden
+        Start-Process -FilePath $oldExe -ArgumentList @('--role=host', '--hidden') -WindowStyle Normal
     } else { Remove-Item -LiteralPath $pointerPath -Force -ErrorAction SilentlyContinue }
     throw "$failure Previous host restored when available."
 } finally {

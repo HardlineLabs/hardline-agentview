@@ -24,6 +24,8 @@ crashed or unresponsive window is recreated on the next open request without
 restarting the network service or execution runtime. Hidden startup applies only
 to initial launch; an explicit open request always shows the window. Window
 display does not wait for the renderer's first paint or agent readiness.
+Managed startup lets the app own this hidden state. Applying Windows' separate
+hidden-window override can suppress the first user request to reveal the window.
 
 ## Permissions and computer use
 
@@ -123,6 +125,10 @@ and renderer-crash recovery with an unavailable backend. Each reopen must comple
 within four seconds. Set `AGENTVIEW_PACKAGED_HOST` to test a different unpacked
 Host directory. Windows packaging compiles the small managed launcher with the
 Windows .NET Framework compiler; its source is tracked in `src/launcher`.
+Immediately after installing, before opening Host, run
+`./scripts/installed-window-smoke.ps1 -InstallDirectory <installed-folder>` to
+verify that the first explicit open produces a responsive native Windows window
+without replacing the running network process.
 
 `npx tsx scripts/runtime-smoke.ts` performs a real agent turn with an image and an
 outside-workspace file write, checks zero approval requests under Full access,
