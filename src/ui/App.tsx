@@ -289,8 +289,7 @@ function HostApp() {
                   The Hardline Labs address is prefilled. Use the secure tunnel
                   address that routes to this Host, or clear it for local-only
                   access. Save settings to apply.
-                  {status?.remoteStatus &&
-                  status.remoteStatus !== "Not configured"
+                  {status?.remoteStatus
                     ? ` Tunnel: ${status.remoteStatus}.`
                     : ""}
                 </small>

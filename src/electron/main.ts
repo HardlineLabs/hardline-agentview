@@ -19,7 +19,7 @@ import { ClientConnection } from "./connection";
 import { enableNetworkAccess, networkAccessEnabled } from "./firewall";
 import type { HostSettings, AppEvent, HostStatus } from "../shared/types";
 import { saveState } from "../host/state";
-import { loadHostSettings } from "../host/settings";
+import { loadHostSettings, recoverHostTunnel } from "../host/settings";
 
 const role =
   process.argv.includes("--role=host") ||
@@ -97,6 +97,7 @@ if (!app.requestSingleInstanceLock()) {
     if (changing) throw new Error("Host setup is already in progress.");
     changing = true;
     try {
+      settings = await recoverHostTunnel(settings, dataDir);
       if (host) await host.stop();
       host = null;
       hostError = "";
@@ -285,19 +286,23 @@ if (!app.requestSingleInstanceLock()) {
           const stat = await fs.stat(params.vaultPath).catch(() => null);
           if (!stat?.isDirectory())
             throw new Error("Choose an existing vault folder.");
-          settings = {
-            vaultPath: path.resolve(params.vaultPath),
-            codexPath: String(params.codexPath || ""),
-            port: params.port,
-            autoStart: Boolean(params.autoStart),
-            remoteAddress: remoteAddress(String(params.remoteAddress || "")),
-            cloudflaredPath: settings.cloudflaredPath,
-            tunnelConfig: settings.tunnelConfig,
-          };
-          await fs.writeFile(
+          const saved = await loadHostSettings(
             path.join(dataDir, "settings.json"),
-            JSON.stringify(settings, null, 2),
+            settings,
           );
+          settings = await recoverHostTunnel(
+            {
+              vaultPath: path.resolve(params.vaultPath),
+              codexPath: String(params.codexPath || ""),
+              port: params.port,
+              autoStart: Boolean(params.autoStart),
+              remoteAddress: remoteAddress(String(params.remoteAddress || "")),
+              cloudflaredPath: saved.cloudflaredPath,
+              tunnelConfig: saved.tunnelConfig,
+            },
+            dataDir,
+          );
+          await saveState(path.join(dataDir, "settings.json"), settings);
           const startupPath =
             process.env.PORTABLE_EXECUTABLE_FILE || app.getPath("exe");
           app.setLoginItemSettings({
