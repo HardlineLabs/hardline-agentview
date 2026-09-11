@@ -21,6 +21,8 @@ for (const role of process.argv.includes("--host-only")
         "dist/ui/**/*",
         "assets/icon.png",
         "package.json",
+        // All runtime imports except Electron are already bundled by esbuild.
+        "!node_modules{,/**/*}",
       ],
       extraMetadata: {
         name:
@@ -32,9 +34,6 @@ for (const role of process.argv.includes("--host-only")
       asar: true,
       asarUnpack: ["dist/electron/runtime.cjs"],
       npmRebuild: false,
-      // esbuild bundles all runtime dependencies except Electron itself. Never ship
-      // dependency-tree build caches (including native Android build artifacts).
-      onNodeModuleFile: () => false,
       win: {
         target: ["portable"],
         icon: "assets/icon.ico",
