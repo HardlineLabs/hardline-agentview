@@ -1,5 +1,6 @@
 import { build, Platform } from "electron-builder";
 import "./icon.mjs";
+import path from "node:path";
 // Fast compression keeps internal builds quick without changing the app payload.
 process.env.ELECTRON_BUILDER_COMPRESSION_LEVEL ||= "3";
 for (const role of process.argv.includes("--host-only")
@@ -12,7 +13,9 @@ for (const role of process.argv.includes("--host-only")
       appId: `labs.hardline.agentview.${role}`,
       productName,
       copyright: "Copyright © Hardline Labs",
-      directories: { output: `out/${role}` },
+      directories: {
+        output: path.join(process.env.AGENTVIEW_PACKAGE_OUTPUT || "out", role),
+      },
       files: [
         "dist/electron/**/*",
         "dist/ui/**/*",
@@ -29,6 +32,9 @@ for (const role of process.argv.includes("--host-only")
       asar: true,
       asarUnpack: ["dist/electron/runtime.cjs"],
       npmRebuild: false,
+      // esbuild bundles all runtime dependencies except Electron itself. Never ship
+      // dependency-tree build caches (including native Android build artifacts).
+      onNodeModuleFile: () => false,
       win: {
         target: ["portable"],
         icon: "assets/icon.ico",

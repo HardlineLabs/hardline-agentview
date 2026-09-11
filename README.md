@@ -107,6 +107,8 @@ npm run client
 
 Use `npm run package:host` when shipping only Host and the PWA. Build the browser
 separately with `npm run pwa:build`.
+`AGENTVIEW_PACKAGE_OUTPUT` can select a fresh output directory when Windows has
+locked a previous build. The package contains the bundled app, not dependency build caches.
 
 `npm run package` creates `out/host/AgentView Host.exe` and
 `out/client/AgentView.exe`. No installer or administrator privileges are required
