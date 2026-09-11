@@ -67,9 +67,18 @@ npm run pwa:smoke
 
 `npm run pwa:dev` serves the browser target locally. `pwa:build` emits only public
 client assets into `dist/client`, including a content-versioned service worker and
-install icons. `.openai/hosting.json` identifies the dedicated static Sites project.
-Publish that exact validated output through Sites; source remains in this private
-repository. Never copy host settings, pairing invitations or tunnel credentials
+install icons. Cloudflare Workers Static Assets serves the `hardline-agentview`
+application at `app.hardline-labs.com`; source remains in this private repository.
+To publish, build and validate the intended revision, zip the **contents** of
+`dist/client` (with `index.html` at the archive root), then open Cloudflare's
+Workers & Pages dashboard, select `hardline-agentview` and create a deployment
+with that archive. Upload the complete build, including `_headers`, `sw.js`,
+the manifest, icons and assets. Keep this a static-assets deployment without a
+Worker script or hosted workspace data. No paid plan is required for static asset
+requests. The custom domain is managed in the application's Settings under
+Domains & Routes. Verify the public-path check below after publishing.
+
+Never copy host settings, pairing invitations or tunnel credentials
 into the web output. Browser-origin storage depends on keeping the deployment URL
 stable; changing origins requires pairing again.
 
