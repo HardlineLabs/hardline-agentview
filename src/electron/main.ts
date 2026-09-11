@@ -47,6 +47,7 @@ if (!app.requestSingleInstanceLock()) {
   let quitting = false;
   let cleaningUp = false;
   let changing = false;
+  let windowNeedsRecovery = false;
   const remember = async (config: import("../shared/types").Connection) => {
     if (!safeStorage.isEncryptionAvailable())
       throw new Error("Windows secure storage is unavailable.");
@@ -115,13 +116,23 @@ if (!app.requestSingleInstanceLock()) {
       emit({ type: "hostStatus", status: hostStatus() });
     }
   }
-  function showWindow() {
-    if (window && !window.isDestroyed()) {
-      window.show();
-      window.focus();
+  function showWindow(reveal = true) {
+    if (!app.isReady()) {
+      void app.whenReady().then(() => showWindow(reveal));
       return;
     }
-    window = new BrowserWindow({
+    if (window && !window.isDestroyed() && windowNeedsRecovery)
+      window.destroy();
+    if (window && !window.isDestroyed()) {
+      if (reveal) {
+        if (window.isMinimized()) window.restore();
+        window.show();
+        window.focus();
+      }
+      return;
+    }
+    windowNeedsRecovery = false;
+    const created = new BrowserWindow({
       width: role === "host" ? 620 : 1500,
       height: role === "host" ? 840 : 940,
       minWidth: role === "host" ? 540 : 940,
@@ -129,7 +140,8 @@ if (!app.requestSingleInstanceLock()) {
       backgroundColor: "#0b1014",
       icon: path.join(__dirname, "../../assets/icon.png"),
       frame: false,
-      show: false,
+      // A user open request must not wait for the renderer's first paint.
+      show: reveal,
       title: app.getName(),
       webPreferences: {
         preload: path.join(__dirname, "preload.cjs"),
@@ -140,27 +152,44 @@ if (!app.requestSingleInstanceLock()) {
         additionalArguments: [`--agentview-role=${role}`],
       },
     });
-    window.setMenuBarVisibility(false);
-    window.webContents.setWindowOpenHandler(({ url }) => {
+    window = created;
+    created.setMenuBarVisibility(false);
+    created.webContents.setWindowOpenHandler(({ url }) => {
       if (/^https:\/\//.test(url)) void shell.openExternal(url);
       return { action: "deny" };
     });
-    window.webContents.on("will-navigate", (event) => event.preventDefault());
-    window.once("ready-to-show", () => {
-      if (!process.argv.includes("--hidden")) window?.show();
+    created.webContents.on("will-navigate", (event) => event.preventDefault());
+    created.on("unresponsive", () => {
+      if (window === created) windowNeedsRecovery = true;
     });
-    window.on("close", (e) => {
+    created.on("responsive", () => {
+      if (window === created) windowNeedsRecovery = false;
+    });
+    created.webContents.on("render-process-gone", () => {
+      if (window === created) windowNeedsRecovery = true;
+    });
+    created.on("close", (e) => {
       if (role === "host" && !quitting) {
         e.preventDefault();
-        window?.hide();
+        created.hide();
       }
     });
-    window.on("closed", () => {
-      window = null;
+    created.on("closed", () => {
+      if (window === created) window = null;
     });
     const dev = process.env.AGENTVIEW_DEV_URL;
-    if (dev) void window.loadURL(dev);
-    else void window.loadFile(path.join(__dirname, "../ui/index.html"));
+    const loading = dev
+      ? created.loadURL(dev)
+      : created.loadFile(path.join(__dirname, "../ui/index.html"));
+    void loading.catch((error: Error) => {
+      if (created.isDestroyed()) return;
+      windowNeedsRecovery = true;
+      if (created.isVisible())
+        dialog.showErrorBox(
+          "AgentView could not open its window",
+          `${error.message}\nOpen AgentView again to retry.`,
+        );
+    });
   }
   function createTray() {
     // A tiny inline PNG is replaced by the product icon when packaged.
@@ -174,16 +203,17 @@ if (!app.requestSingleInstanceLock()) {
     tray.setToolTip("AgentView Host");
     tray.setContextMenu(
       Menu.buildFromTemplate([
-        { label: "Open AgentView Host", click: showWindow },
+        { label: "Open AgentView Host", click: () => showWindow() },
         {
           label: "Pair a device",
-          click: showWindow,
+          click: () => showWindow(),
         },
         { type: "separator" },
         { label: "Quit host", click: () => app.quit() },
       ]),
     );
-    tray.on("double-click", showWindow);
+    tray.on("click", () => showWindow());
+    tray.on("double-click", () => showWindow());
   }
   client.on("event", emit);
   app.on("second-instance", (_event, args) => {
@@ -345,13 +375,16 @@ if (!app.requestSingleInstanceLock()) {
     await fs.mkdir(dataDir, { recursive: true });
     if (role === "host") {
       try {
-        settings = await loadHostSettings(path.join(dataDir, "settings.json"), settings);
+        settings = await loadHostSettings(
+          path.join(dataDir, "settings.json"),
+          settings,
+        );
       } catch (error: any) {
         hostError = `Could not load Host settings: ${error.message}`;
       }
       createTray();
     }
-    showWindow();
+    showWindow(!process.argv.includes("--hidden"));
     if (role === "host" && !hostError) void startHost();
     if (role === "host") setInterval(() => void health(), 5000).unref();
   });
@@ -359,11 +392,11 @@ if (!app.requestSingleInstanceLock()) {
     if (role !== "host") app.quit();
   });
   app.on("before-quit", (event) => {
+    quitting = true;
     if (host) {
       event.preventDefault();
       if (cleaningUp) return;
       cleaningUp = true;
-      quitting = true;
       void host.stop().finally(async () => {
         await health();
         host = null;

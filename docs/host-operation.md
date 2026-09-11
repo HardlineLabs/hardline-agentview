@@ -10,6 +10,23 @@ does not establish that the network listener or tunnel is reachable. A malformed
 or unreadable settings file now reports a startup error instead of silently using
 LAN-only defaults; Windows UTF-8 BOM files are accepted.
 
+## Opening the Host window
+
+The managed installation's **AgentView Host.exe** is a small launcher that reads
+`current.json` and opens the installed version directly. **AgentView Host.lnk**
+also opens that version. Repeated clicks bring the existing window forward;
+they do not unpack the portable distribution again or start another workspace.
+The portable download still extracts its bundle when launched, so use the managed
+entry points for everyday operation.
+
+One click on the tray icon opens Host. Minimized windows are restored. A missing,
+crashed or unresponsive window is recreated on the next open request without
+restarting the network service or execution runtime. Hidden startup applies only
+to initial launch; an explicit open request always shows the window. Window
+display does not wait for the renderer's first paint or agent readiness.
+Managed startup lets the app own this hidden state. Applying Windows' separate
+hidden-window override can suppress the first user request to reveal the window.
+
 ## Permissions and computer use
 
 Choose **Host → Default agent permissions → Full access** for a dedicated agent
@@ -46,6 +63,7 @@ administrator account, which would select a different Codex sign-in and data.
 Use the managed task instead of the portable app's separate start-at-sign-in toggle.
 The installer updates **AgentView Host.lnk** in the installation folder to open
 the same validated version used by the startup task.
+It also installs the small launcher as **AgentView Host.exe** in the folder root.
 The installer clears that toggle and removes this installation's older login entry
 when registering managed startup, preventing two host versions from racing at sign-in.
 
@@ -100,6 +118,17 @@ actions. `node scripts/worker-smoke.mjs` uses the installed signed-in runtime to
 verify that the same execution worker survives a host crash/restart. Set
 `AGENTVIEW_PACKAGED=1` to test the unpacked release payload. The test uses isolated
 Host settings and removes its own processes and temporary files.
+
+After packaging, `node scripts/window-smoke.mjs` checks hidden startup, repeated
+reopening through the managed launcher, minimization, missing-window recreation
+and renderer-crash recovery with an unavailable backend. Each reopen must complete
+within four seconds. Set `AGENTVIEW_PACKAGED_HOST` to test a different unpacked
+Host directory. Windows packaging compiles the small managed launcher with the
+Windows .NET Framework compiler; its source is tracked in `src/launcher`.
+Immediately after installing, before opening Host, run
+`./scripts/installed-window-smoke.ps1 -InstallDirectory <installed-folder>` to
+verify that the first explicit open produces a responsive native Windows window
+without replacing the running network process.
 
 `npx tsx scripts/runtime-smoke.ts` performs a real agent turn with an image and an
 outside-workspace file write, checks zero approval requests under Full access,
