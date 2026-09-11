@@ -32,5 +32,17 @@ export default defineConfig(({ mode }) => ({
       : []),
   ],
   base: mode === "pwa" ? "/" : "./",
+  // Watching extracted executables can lock directories during Windows packaging.
+  server: {
+    watch: {
+      ignored: [
+        "**/out/**",
+        "**/artifacts/**",
+        "**/.local/**",
+        "**/dist/**",
+        "**/.wrangler/**",
+      ],
+    },
+  },
   build: { outDir: mode === "pwa" ? "dist/client" : "dist/ui" },
 }));
