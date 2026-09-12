@@ -2,7 +2,7 @@
 
 ## Address migration
 
-Host 0.4.2-dev.6 uses `agentviewapp.hardline-labs.com` for pairing and QR links.
+Host 0.4.2 uses `agentviewapp.hardline-labs.com` for pairing and QR links.
 If you installed AgentView from `app.hardline-labs.com`, add the new address to
 your Home Screen, open its new icon, pair again and enable notifications again.
 Saved pairing, local drafts and push subscriptions do not transfer between origins;
