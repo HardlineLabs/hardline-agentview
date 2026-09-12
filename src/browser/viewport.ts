@@ -21,7 +21,7 @@ export function trackViewport() {
     );
     // Ignore pinch zoom; use the visible viewport only for keyboard/layout changes.
     if (!viewport || Math.abs(viewport.scale - 1) <= 0.05) {
-      // Installed apps measure the fixed viewport, not an inset-reduced dvh.
+      // Installed apps measure 100vh, not a potentially inset-reduced fixed frame.
       // Browser tabs retain dvh so their address/tool bars are respected.
       // iOS can retain stale visualViewport height/offset after a native picker
       // or app switch; feeding those values back into a fixed shell leaves gaps.

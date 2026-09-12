@@ -295,12 +295,26 @@ export async function safeAreaSmoke(
   const insets = await page.addStyleTag({
     content: `
     .pwa-document { --pwa-safe-top: 59px; --pwa-safe-bottom: 34px; }
-    /* Model WebKit's inset-reduced dynamic viewport measurement. */
-    .pwa-viewport-measure { height: calc(100dvh - 93px); }
+    /* Model a fixed frame that ends above the display bottom. Explicit 100vh
+       must win over that short frame; auto height would shrink by 93px.
+       Important prevents the production selector from disabling the fixture. */
+    .pwa-viewport-measure { bottom: 93px !important; }
   `,
   });
   await viewport(page, 751);
   await page.getByLabel("Message your agent").blur();
+  await geometry(page, 844);
+  assert.equal(
+    await page
+      .locator(".pwa-viewport-measure")
+      .evaluate((element) => getComputedStyle(element).bottom),
+    "93px",
+    "The shortened fixed-frame fixture must actually apply",
+  );
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event("pageshow"));
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
   await geometry(page, 844);
   const bounds = await page.evaluate(() => {
     const rect = (selector: string) =>
@@ -350,6 +364,6 @@ export async function safeAreaSmoke(
     .getByText("Welcome to First. Your workspace stays on this computer.")
     .waitFor();
   console.log(
-    `${engine}: installed safe areas, inset-reduced viewport, keyboard and OS-owned viewport bounds passed`,
+    `${engine}: installed safe areas, shortened fixed frame, keyboard and viewport bounds passed`,
   );
 }

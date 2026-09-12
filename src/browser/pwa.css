@@ -15,6 +15,11 @@
 .pwa-document.pwa-keyboard {
   --pwa-bottom-space: 0px;
 }
+.pwa-document.pwa-standalone,
+.pwa-document.pwa-standalone body {
+  /* Percent heights can omit the status area in an installed iOS app. */
+  height: 100vh;
+}
 .pwa-document body {
   position: fixed;
   inset: 0;
@@ -645,10 +650,8 @@
   pointer-events: none;
 }
 .pwa-standalone .pwa-viewport-measure {
-  /* A fixed element reaches the installed viewport even when dvh omits insets.
-     Do not use screen.height: OS-owned bars may be outside the web viewport. */
-  bottom: 0;
-  height: auto;
+  /* Use an explicit viewport height; stretching to bottom: 0 can end short. */
+  height: 100vh;
 }
 .browser-app .context-compact {
   flex: 0 0 auto;

@@ -92,8 +92,9 @@ dialogs scroll within their own boundaries. Reaching the end of a conversation
 does not scroll the app into blank space; code blocks still allow sideways reading
 without trapping vertical chat scrolling.
 
-An installed app measures a fixed viewport frame instead of `100dvh`; browser tabs
-continue using the dynamic viewport to respect Safari's toolbars. Header and composer
+An installed app sizes its document and measures its baseline with explicit `100vh`,
+instead of percentage heights or stretching a fixed frame between top and bottom.
+Browser tabs continue using the dynamic viewport to respect Safari's toolbars. Header and composer
 surfaces extend into the safe areas, while their controls clear the notch and home
 indicator. Bottom spacing uses the larger of the normal margin and the safe inset,
 instead of adding both. While editing,
@@ -116,7 +117,8 @@ iOS still needs to retrieve its conversation from the Host.
 WebKit has [reported viewport-height errors](https://bugs.webkit.org/show_bug.cgi?id=254868)
 in installed apps that exclude safe areas from some height measurements. Applying
 safe-area padding inside an already reduced height leaves unnecessary space.
-The fixed frame avoids that measurement dependency. The PWA already requests
+The explicit standalone baseline avoids relying on an inset-reduced fixed frame.
+This workaround still requires physical iPhone validation. The PWA already requests
 `viewport-fit=cover` and a translucent status bar, following
 [Apple's safe-area guidance](https://webkit.org/blog/7929/designing-websites-for-iphone-x/).
 Some iOS versions also have a separate [system-owned status-strip bug](https://bugs.webkit.org/show_bug.cgi?id=301994).
@@ -169,7 +171,9 @@ typing, delayed visual-viewport geometry, scrolling past both ends of long and
 empty chats, wide code blocks, growing/shrinking drafts, repeated model/effort choices,
 slow reconnects with messages retained, repeated drawer/settings/brain changes,
 search, small screens and rotation. Installed-mode checks include nonzero safe insets,
-inset-reduced height measurements and a web viewport smaller than the screen.
+a shortened fixed frame and a web viewport smaller than the screen. The fixed-frame
+fixture asserts that its bottom offset applies, so production selector specificity
+cannot silently disable the regression condition.
 Synthetic keyboard geometry changes separately
 from the layout viewport; it is a regression test, not a real iOS keyboard.
 Chromium uses wheel input to check scroll routing; mobile WebKit checks DOM scroll
