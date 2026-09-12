@@ -14,7 +14,7 @@ its window leaves it in the tray.
 For iPhone, choose **Pair device**, name the phone, and enter the six-digit code
 at [app.hardline-labs.com](https://app.hardline-labs.com). Host checks remote
 reachability first. Codes expire in five minutes and work for one device.
-Windows/native Android clients use **Older clients and local pairing → Create full
+Windows clients use **Older clients and local pairing → Create full
 invitation**. The host can remove a paired device's access at any time. Each paired
 device has full access to this workspace. Version 0.3 requires fresh pairing;
 connection keys from 0.2 no longer work.
@@ -26,24 +26,11 @@ that endpoint when the paired LAN connection is unavailable. **Local**, **Remote
 and reconnecting states show which connection is in use. Workspace messages are
 end-to-end encrypted through both paths. No router port forwarding is needed.
 
-## On Android
-
-Install the signed APK from the private GitHub release. Chat fills the screen;
-open the drawer to switch conversations, filter projects, browse archived chats,
-see account limits or open settings. The small live activity strip opens the
-interactive brain. Drag notes, pinch to zoom, inspect activity, attach notes and
-return to chat without losing your draft. All commands still run on the host.
-The phone must run Android 7 or later with a current Android System WebView.
-
-Context usage, account limits, model/effort selection, approvals, steering and
-conversation controls are shared with the Windows client. See [Android build and
-validation](docs/android.md) for developer setup and signed releases.
-
 ## On iPhone and the web
 
 Open the AgentView PWA in Safari and add it to your Home Screen. Open its new icon,
 then enter a fresh six-digit code from your own Host with Remote access configured.
-The web app shares the Android interface and uses the existing encrypted protocol;
+The web app uses the shared workspace interface and existing encrypted protocol;
 Host 0.4 enables saved Full Access defaults, onboarding, renamed chats, bulk
 archive/delete, image/file attachments, durable drafts, files, queued follow-ups
 and optional completion notifications. Older hosts retain the basic client.

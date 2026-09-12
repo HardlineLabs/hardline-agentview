@@ -89,11 +89,6 @@
   font-size: 11px;
   padding: 9px 12px;
 }
-.scan-pairing {
-  width: 100%;
-  min-height: 48px;
-  margin-bottom: 18px;
-}
 .graph-canvas {
   touch-action: none;
 }

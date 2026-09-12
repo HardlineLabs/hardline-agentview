@@ -41,7 +41,6 @@ import { Chat, Markdown } from "./Chat";
 import {
   ago,
   bridge,
-  mobile,
   browser,
   colors,
   domainLabel,
@@ -90,7 +89,7 @@ export function Mark({ size = 28 }: { size?: number }) {
   );
 }
 function WindowBar() {
-  if (mobile) return null;
+  if (browser) return null;
   return (
     <div className="window-bar">
       <div className="window-caption">
@@ -423,8 +422,8 @@ function HostApp() {
           <details className="host-advanced">
             <summary>Older clients and local pairing</summary>
             <p>
-              Windows and native Android clients use a full invitation. A
-              LAN-only invitation cannot connect the iPhone web app.
+              Windows clients use a full invitation. A LAN-only invitation
+              cannot connect the iPhone web app.
             </p>
             <button
               className="secondary"
@@ -672,29 +671,6 @@ function Connect({
                 <QrCode size={20} /> Scan pairing invitation
               </button>
             </details>
-          )}
-          {mobile && !browser && (
-            <button
-              type="button"
-              className="scan-pairing secondary"
-              disabled={connecting}
-              onClick={async () => {
-                setScanError("");
-                if (browser) {
-                  setScanning(true);
-                  return;
-                }
-                try {
-                  const result = await invoke("connection.scan");
-                  setCode(result.value);
-                  onConnect(result.value, "", routePreference);
-                } catch (e: any) {
-                  setScanError(e.message);
-                }
-              }}
-            >
-              <QrCode size={20} /> Scan pairing invitation
-            </button>
           )}
           {!browser && (
             <>
@@ -1035,18 +1011,6 @@ function ClientApp() {
     setPhoneView("chat");
     setDrawer(false);
   };
-  useEffect(() => {
-    const back = () => {
-      if (palette) setPalette(false);
-      else if (settingsOpen) setSettingsOpen(false);
-      else if (drawer) setDrawer(false);
-      else if (selected) setSelected(undefined);
-      else if (activityOpen) setActivityOpen(false);
-      else setPhoneView("chat");
-    };
-    window.addEventListener("agentview:back", back);
-    return () => window.removeEventListener("agentview:back", back);
-  }, [palette, settingsOpen, drawer, selected, activityOpen]);
   const connected = connection === "connected";
   const g = snapshot?.graph || emptyGraph;
   const currentThread =
@@ -1084,7 +1048,7 @@ function ClientApp() {
   };
   return (
     <div
-      className={`client-app ${browser ? "browser-app" : ""} phone-${phoneView} ${drawer ? "drawer-open" : ""} ${mobile ? "native-mobile" : ""}`}
+      className={`client-app ${browser ? "browser-app" : ""} phone-${phoneView} ${drawer ? "drawer-open" : ""}`}
     >
       <WindowBar />
       {browser && <PwaControls selectedThread={selectedThread} />}
@@ -1621,7 +1585,7 @@ function ClientApp() {
                 </div>
               )}
             </main>
-            {(chatOpen || mobile) && (
+            {(chatOpen || browser) && (
               <Chat
                 expanded={browser && Boolean(snapshot.capabilities)}
                 onboarding={snapshot.preferences?.onboarding}
