@@ -1,5 +1,19 @@
 # AgentView on iPhone and the web
 
+## Address migration
+
+Host 0.4.2-dev.6 uses `agentviewapp.hardline-labs.com` for pairing and QR links.
+If you installed AgentView from `app.hardline-labs.com`, add the new address to
+your Home Screen, open its new icon, pair again and enable notifications again.
+Saved pairing, local drafts and push subscriptions do not transfer between origins;
+workspace files and conversation history remain on Host.
+
+The old web address temporarily redirects to the new one. Its `/api/pair/*`
+endpoints remain on the same Worker and pairing directory for older hosts, whose
+requests reject redirects. Keep those API routes until older hosts have updated;
+the generic address can later become a PWA directory while preserving that route.
+The scanner accepts QR links from either address during migration.
+
 The PWA shares AgentView's React interface, graph and encrypted workspace protocol
 with the Windows client. Its static deployment delivers application
 files. Each phone pairs with its own Windows host; that host retains its vault,
@@ -7,7 +21,7 @@ repositories, agent sign-in and execution. There is no shared hosted agent accou
 
 ## Install and pair
 
-1. Open [app.hardline-labs.com](https://app.hardline-labs.com) in Safari on iPhone.
+1. Open [agentviewapp.hardline-labs.com](https://agentviewapp.hardline-labs.com) in Safari on iPhone.
 2. Open Share (sometimes under the ••• menu), select **Add to Home Screen**, keep
    **Open as Web App** enabled if shown, and tap **Add**.
 3. Open AgentView from its new icon before pairing. Browser tabs and installed apps
@@ -148,7 +162,7 @@ npm run pwa:smoke
 `npm run pwa:dev` serves the browser target locally. `pwa:build` emits only public
 client assets into `dist/client`, including a content-versioned service worker and
 install icons. Cloudflare Workers Static Assets serves the `hardline-agentview`
-application at `app.hardline-labs.com`; source is in this public repository.
+application at `agentviewapp.hardline-labs.com`; source is in this public repository.
 To publish, build and validate the intended revision, sign into Wrangler for the
 owning Cloudflare account, then run `npx wrangler deploy`. The tracked
 `wrangler.jsonc` publishes the complete static build plus the six-digit pairing

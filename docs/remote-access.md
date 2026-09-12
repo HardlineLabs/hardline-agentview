@@ -19,7 +19,7 @@ remove one without changing other devices' credentials. Removing access closes a
 sessions. Each host supports up to 100 paired devices. Windows
 clients retain full invitations under **Older clients and local pairing**.
 
-Six-digit discovery uses `app.hardline-labs.com/api/pair`, a trusted Cloudflare
+Six-digit discovery uses `agentviewapp.hardline-labs.com/api/pair`, a trusted Cloudflare
 Worker with a SQLite Durable Object. It temporarily holds the invitation and
 public route, not files, conversations, Codex credentials or permanent device
 credentials. This expands initial-pairing trust to the directory operator;

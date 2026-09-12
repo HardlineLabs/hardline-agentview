@@ -10,6 +10,10 @@ does not establish that the network listener or tunnel is reachable. A malformed
 or unreadable settings file now reports a startup error instead of silently using
 LAN-only defaults; Windows UTF-8 BOM files are accepted.
 
+Host 0.4.2-dev.6 updates pairing and QR links to `agentviewapp.hardline-labs.com`.
+See [the web address migration](pwa.md#address-migration) before replacing an
+installed phone PWA. Existing host settings and remote tunnel routes are retained.
+
 ## Opening the Host window
 
 Host 0.4.2-dev.5 preserves the saved connector settings when saving the Host form.
