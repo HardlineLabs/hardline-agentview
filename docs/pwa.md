@@ -2,7 +2,7 @@
 
 ## Address migration
 
-Host 0.4.2-dev.6 uses `agentviewapp.hardline-labs.com` for pairing and QR links.
+Host 0.4.2 uses `agentviewapp.hardline-labs.com` for pairing and QR links.
 If you installed AgentView from `app.hardline-labs.com`, add the new address to
 your Home Screen, open its new icon, pair again and enable notifications again.
 Saved pairing, local drafts and push subscriptions do not transfer between origins;
@@ -81,8 +81,11 @@ and model; sending the first message removes it.
 
 Use **Rename** in a conversation or **Select conversations** in the drawer to
 archive, restore or permanently delete several chats. Active chats are protected;
-partial failures retain the failed selection. Terminal and Agent workspace nodes
-now live in the brain's coordinates and move with the graph as you drag.
+partial failures retain the failed selection. Terminal and Agent workspace appear
+as compact nodes below the brain network, without note links. Drag either station
+independently to place it; its position lasts while the graph is open. They scale
+with the notes during zoom, and Fit includes both stations. Tap a busy station to
+open its active conversation.
 
 Attach images or files from the composer. Images are converted on the device to
 JPEG with a longest edge of 2,048 pixels; unsupported image decoding reports an

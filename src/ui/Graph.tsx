@@ -20,6 +20,15 @@ import { moveToward } from "./motion";
 
 type Node = Note &
   SimulationNodeDatum & { radius: number; homeX: number; homeY: number };
+type Station = {
+  id: string;
+  title: string;
+  symbol: string;
+  color: string;
+  x: number;
+  y: number;
+  placed: boolean;
+};
 export type GraphControls = { fit: () => void; zoom: (factor: number) => void };
 type Props = {
   graph: GraphData;
@@ -38,6 +47,37 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
     const latest = useRef(props);
     latest.current = props;
     const nodes = useRef<Node[]>([]);
+    const stations = useRef<Station[]>([
+      {
+        id: "terminal",
+        title: "Terminal",
+        symbol: ">_",
+        color: "#e6bc78",
+        x: 0,
+        y: 0,
+        placed: false,
+      },
+      {
+        id: "workspace",
+        title: "Agent workspace",
+        symbol: "✦",
+        color: "#b3ffe1",
+        x: 0,
+        y: 0,
+        placed: false,
+      },
+    ]);
+    const positionStations = () => {
+      const ns = nodes.current;
+      const left = Math.min(0, ...ns.map((n) => (n.x ?? 0) - n.radius));
+      const right = Math.max(0, ...ns.map((n) => (n.x ?? 0) + n.radius));
+      const bottom = Math.max(0, ...ns.map((n) => (n.y ?? 0) + n.radius));
+      stations.current.forEach((station, i) => {
+        if (station.placed) return;
+        station.x = (left + right) / 2 + (i ? 90 : -90);
+        station.y = bottom + 100;
+      });
+    };
     const sim = useRef<ReturnType<typeof forceSimulation<Node>> | null>(null);
     const view = useRef({
       x: 0,
@@ -60,8 +100,11 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
       const xs = ns.map((n) => n.x || 0),
         ys = ns.map((n) => n.y || 0);
       if (browser) {
-        xs.push(-370, 370);
-        ys.push(330);
+        positionStations();
+        for (const station of stations.current) {
+          xs.push(station.x - 55, station.x + 55);
+          ys.push(station.y + 45);
+        }
       }
       const minX = Math.min(...xs),
         maxX = Math.max(...xs),
@@ -159,9 +202,12 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
       let frame = 0;
       let lastTime = 0;
       let dragging: Node | null = null;
+      let draggingStation: Station | null = null;
+      let stationOffset = { x: 0, y: 0 };
       let pan = false;
       let moved = false;
       let down = { x: 0, y: 0 };
+      let press = { x: 0, y: 0 };
       let hovered: string | undefined;
       const orbPositions = new Map<string, { x: number; y: number }>();
       const connections = new Map<
@@ -197,6 +243,13 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
             Math.hypot((n.x || 0) - p.x, (n.y || 0) - p.y) <
             n.radius + 10 / view.current.scale,
         );
+      const hitStation = (p: { x: number; y: number }) =>
+        browser
+          ? stations.current.find(
+              (s) =>
+                Math.hypot(s.x - p.x, s.y - p.y) < 13 + 10 / view.current.scale,
+            )
+          : undefined;
       const pointers = new Map<number, { x: number; y: number }>();
       let pinchDistance = 0;
       const distance = () => {
@@ -214,20 +267,32 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
             sim.current?.alphaTarget(0);
           }
           dragging = null;
+          draggingStation = null;
           pan = false;
           moved = true;
           pinchDistance = distance();
           return;
         }
-        const orb = orbHits.find((a) => Math.hypot(a.x - p.x, a.y - p.y) < 20);
+        const w = world(p);
+        draggingStation = hitStation(w) || null;
+        const orb =
+          !draggingStation &&
+          orbHits.find((a) => Math.hypot(a.x - p.x, a.y - p.y) < 20);
         if (orb) {
           latest.current.onAgent(orb.id);
           return;
         }
         down = p;
+        press = p;
         moved = false;
-        dragging = hit(world(p)) || null;
-        pan = !dragging;
+        dragging = draggingStation ? null : hit(w) || null;
+        pan = !dragging && !draggingStation;
+        if (draggingStation) {
+          stationOffset = {
+            x: draggingStation.x - w.x,
+            y: draggingStation.y - w.y,
+          };
+        }
         c.setPointerCapture(e.pointerId);
         c.style.cursor = "grabbing";
         if (dragging) {
@@ -250,9 +315,15 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
           return;
         }
         const w = world(p);
-        if (dragging || pan) {
-          if (Math.hypot(p.x - down.x, p.y - down.y) > 2) moved = true;
-          if (dragging) {
+        if (dragging || draggingStation || pan) {
+          if (Math.hypot(p.x - press.x, p.y - press.y) > 4) moved = true;
+          if (draggingStation) {
+            if (moved) {
+              draggingStation.x = w.x + stationOffset.x;
+              draggingStation.y = w.y + stationOffset.y;
+              draggingStation.placed = true;
+            }
+          } else if (dragging) {
             dragging.fx = w.x;
             dragging.fy = w.y;
           } else {
@@ -264,9 +335,12 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
           return;
         }
         const node = hit(w);
+        const station = hitStation(w);
         hovered = node?.id;
         c.style.cursor =
-          node || orbHits.some((a) => Math.hypot(a.x - p.x, a.y - p.y) < 20)
+          node ||
+          station ||
+          orbHits.some((a) => Math.hypot(a.x - p.x, a.y - p.y) < 20)
             ? "pointer"
             : "grab";
         setHover(
@@ -283,6 +357,17 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
       const pointerup = (e: PointerEvent) => {
         pointers.delete(e.pointerId);
         if (e.type === "pointercancel") moved = true;
+        if (draggingStation && !moved) {
+          const station = draggingStation;
+          const busy = latest.current.agents.find(
+            (a) =>
+              a.active &&
+              !a.target &&
+              (a.action === "running" ? "terminal" : "workspace") ===
+                station.id,
+          );
+          if (busy) latest.current.onAgent(busy.threadId);
+        }
         if (dragging) {
           if (!moved) latest.current.onSelect(dragging);
           dragging.fx = null;
@@ -290,6 +375,7 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
           sim.current?.alphaTarget(0);
         }
         dragging = null;
+        draggingStation = null;
         pan = false;
         c.style.cursor = "grab";
       };
@@ -473,39 +559,22 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
         const agents = p.agents.filter(
           (a) => a.active || Date.now() - a.updated < 15000,
         );
-        const stations = [
-          {
-            id: "terminal",
-            title: "Terminal",
-            symbol: ">_",
-            x: 86,
-            y: v.height - 58,
-            color: "#e6bc78",
-          },
-          {
-            id: "workspace",
-            title: "Agent workspace",
-            symbol: "✦",
-            x: v.width - 100,
-            y: v.height - 58,
-            color: "#b3ffe1",
-          },
-        ].map((station, i) =>
+        if (browser) positionStations();
+        const renderedStations = stations.current.map((station, i) =>
           browser
-            ? {
+            ? station
+            : {
                 ...station,
-                x: (i ? 330 : -330) + Math.sin(t / 15 + i) * 18,
-                y: 280 + Math.cos(t / 18 + i) * 12,
-              }
-            : { ...station, ...world(station) },
+                ...world({ x: i ? v.width - 100 : 86, y: v.height - 58 }),
+              },
         );
         const stationFor = (a: Agent) =>
-          stations[a.action === "running" ? 0 : 1];
-        for (const station of stations) {
+          renderedStations[a.action === "running" ? 0 : 1];
+        for (const station of renderedStations) {
           const busy = agents.filter(
             (a) => a.active && !a.target && stationFor(a).id === station.id,
           );
-          if (busy.length)
+          if (busy.length && !browser)
             orbHits.push({
               id: busy[0].threadId,
               x: station.x * v.scale + v.width / 2 + v.x,
@@ -513,27 +582,32 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
             });
           ctx.save();
           ctx.translate(station.x, station.y);
-          ctx.scale(1 / v.scale, 1 / v.scale);
+          if (!browser) ctx.scale(1 / v.scale, 1 / v.scale);
           ctx.fillStyle = "#101e25";
           ctx.strokeStyle = station.color + (busy.length ? "cc" : "45");
           ctx.shadowColor = station.color;
           ctx.shadowBlur = busy.length ? 18 + Math.sin(t * 2) * 4 : 0;
           ctx.lineWidth = 1.3;
           ctx.beginPath();
-          ctx.roundRect(-25, -22, 50, 44, 13);
+          if (browser) ctx.arc(0, 0, 13, 0, Math.PI * 2);
+          else ctx.roundRect(-25, -22, 50, 44, 13);
           ctx.fill();
           ctx.stroke();
           ctx.shadowBlur = 0;
           ctx.fillStyle = station.color;
-          ctx.font = '600 17px "DM Sans", sans-serif';
+          ctx.font = `600 ${browser ? 11 : 17}px "DM Sans", sans-serif`;
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.fillText(station.symbol, 0, -1);
           ctx.font = '500 11px "DM Sans", sans-serif';
-          ctx.fillText(station.title, 0, 35);
+          ctx.fillText(station.title, 0, browser ? 27 : 35);
           if (busy.length) {
             ctx.font = '400 10px "DM Sans", sans-serif';
-            ctx.fillText(`${busy.length} active · ${busy[0].action}`, 0, 50);
+            ctx.fillText(
+              `${busy.length} active · ${busy[0].action}`,
+              0,
+              browser ? 42 : 50,
+            );
           }
           ctx.restore();
         }
@@ -652,7 +726,7 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
       <div className="graph-surface">
         <canvas
           ref={canvas}
-          aria-label="Interactive knowledge graph. Drag notes to move them, scroll to zoom, double-click to fit."
+          aria-label="Interactive knowledge graph. Drag notes or activity stations to move them, scroll to zoom, double-click to fit."
         />
         <div className="graph-vignette" />
         {hover && (
