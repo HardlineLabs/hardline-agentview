@@ -8,6 +8,9 @@ export function trackViewport() {
   document.body.append(measure);
   let frame = 0;
   let settleUntil = 0;
+  let editingUntil = 0;
+  const editable =
+    "textarea, input:not([type=checkbox]):not([type=radio]), [contenteditable=true]";
   const update = () => {
     frame = 0;
     // Ignore pinch zoom; use the visible viewport only for keyboard/layout changes.
@@ -16,9 +19,9 @@ export function trackViewport() {
       // iOS can retain stale visualViewport height/offset after a native picker
       // or app switch; feeding those values back into a fixed shell leaves gaps.
       const fullHeight = measure.getBoundingClientRect().height || innerHeight;
-      const editing = document.activeElement?.matches(
-        "textarea, input:not([type=checkbox]):not([type=radio]), [contenteditable=true]",
-      );
+      const editing =
+        document.activeElement?.matches(editable) ||
+        performance.now() < editingUntil;
       const keyboard = Boolean(
         editing && viewport && fullHeight - viewport.height > 120,
       );
@@ -48,7 +51,12 @@ export function trackViewport() {
   window.addEventListener("resize", settle);
   window.addEventListener("pageshow", settle);
   document.addEventListener("focusin", settle);
-  document.addEventListener("focusout", settle);
+  document.addEventListener("focusout", (event) => {
+    // Let a tap finish before moving the button that dismissed the keyboard.
+    if ((event.target as Element)?.matches(editable))
+      editingUntil = performance.now() + 250;
+    settle();
+  });
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) settle();
   });
