@@ -1,6 +1,6 @@
 {
   "name": "hardline-agentview",
-  "version": "0.4.1",
+  "version": "0.4.2-dev.5",
   "description": "A living workspace for human and agent collaboration",
   "private": true,
   "type": "module",
@@ -17,17 +17,12 @@
     "package": "npm run build && node scripts/package.mjs",
     "package:host": "npm run build && node scripts/package.mjs --host-only",
     "smoke": "node scripts/smoke.mjs",
-    "android:sync": "npm run build && node scripts/android-assets.mjs && cap sync android",
-    "android:debug": "npm run android:sync && cd android && gradlew.bat assembleDebug",
     "pwa:dev": "vite --mode pwa --host 127.0.0.1",
     "pwa:build": "tsc --noEmit && node scripts/build-pwa.mjs",
     "pwa:smoke": "tsx scripts/pwa-smoke.ts",
     "pwa:remote-smoke": "tsx scripts/pwa-remote-smoke.ts"
   },
   "dependencies": {
-    "@capacitor/android": "8.4.3",
-    "@capacitor/app": "^8.1.1",
-    "@capacitor/core": "8.4.3",
     "@fontsource/dm-sans": "^5.3.0",
     "@fontsource/manrope": "^5.3.0",
     "chokidar": "^4.0.3",
@@ -45,7 +40,6 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "@capacitor/cli": "8.4.3",
     "@types/d3-force": "^3.0.10",
     "@types/node": "^24.0.0",
     "@types/qrcode": "^1.5.6",

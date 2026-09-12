@@ -159,9 +159,10 @@ export function WorkspaceTools({
             </select>
           </label>
           <p>
-            Full access lets agents edit files and run commands with network
-            access without routine approval. Windows administrator rights and
-            computer-use app permissions are separate.
+            Full access allows files and commands outside the workspace, with
+            network access. Actions flagged by the runtime can still request
+            approval. Windows administrator rights and computer-use app
+            permissions are separate.
           </p>
           <button
             disabled={busy}

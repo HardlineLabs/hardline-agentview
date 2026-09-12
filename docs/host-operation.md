@@ -10,11 +10,44 @@ does not establish that the network listener or tunnel is reachable. A malformed
 or unreadable settings file now reports a startup error instead of silently using
 LAN-only defaults; Windows UTF-8 BOM files are accepted.
 
+## Opening the Host window
+
+Host 0.4.2-dev.5 preserves the saved connector settings when saving the Host form.
+If connector paths are missing, it can recover this Host's existing managed
+`tunnel.yml` and installed cloudflared, after checking the endpoint, origin port
+and certificate path. It does not create tunnels or alter remote routes.
+Open Host and click **Pair device**: pairing waits up to 25 seconds for the
+managed connector to register, then verifies the public encrypted Host proof
+before publishing a code. Invalid local setup and failed connector startup are
+reported in Host; the remote endpoint URL alone does not configure a connector.
+
+The managed installation's **AgentView Host.exe** is a small launcher that reads
+`current.json` and opens the installed version directly. **AgentView Host.lnk**
+also opens that version. Repeated clicks bring the existing window forward;
+they do not unpack the portable distribution again or start another workspace.
+The portable download still extracts its bundle when launched, so use the managed
+entry points for everyday operation.
+
+One click on the tray icon opens Host. Minimized windows are restored. A missing,
+crashed or unresponsive window is recreated on the next open request without
+restarting the network service or execution runtime. Hidden startup applies only
+to initial launch; an explicit open request always shows the window. Window
+display does not wait for the renderer's first paint or agent readiness.
+Managed startup lets the app own this hidden state. Applying Windows' separate
+hidden-window override can suppress the first user request to reveal the window.
+
 ## Permissions and computer use
 
 Choose **Host → Default agent permissions → Full access** for a dedicated agent
-computer. This sets Codex's full filesystem/network sandbox policy and `never`
+computer. This sets Codex's full filesystem/network sandbox policy and `on-request`
 approval policy for new conversations and each new turn, including resumed chats.
+Routine work can run outside the workspace; actions requiring approval can reach
+the configured Codex reviewer instead of being denied because prompts are disabled.
+AgentView does not automatically accept approvals. Full access does not override
+explicit forbidden rules or managed restrictions. Before Host 0.4.2-dev.3, Full
+access forced `never`; changing Codex's global approval setting or restarting its
+runtime did not remove that Host override. Updating Host applies the correction
+on the next new turn without restarting the execution worker.
 Changing the default does not alter a turn already running. Workspace and Read
 only modes remain available. Organization requirements and individual connected
 apps can impose their own restrictions.
@@ -46,6 +79,7 @@ administrator account, which would select a different Codex sign-in and data.
 Use the managed task instead of the portable app's separate start-at-sign-in toggle.
 The installer updates **AgentView Host.lnk** in the installation folder to open
 the same validated version used by the startup task.
+It also installs the small launcher as **AgentView Host.exe** in the folder root.
 The installer clears that toggle and removes this installation's older login entry
 when registering managed startup, preventing two host versions from racing at sign-in.
 
@@ -94,6 +128,12 @@ not retrospectively delivered as push alerts.
 
 ## Validation
 
+With Host stopped, set `AGENTVIEW_LIVE_TEST=1` and `AGENTVIEW_PACKAGED_HOST` to the
+installed executable, then run `npx tsx scripts/installed-pairing-smoke.ts`.
+This opens Host, clicks Pair without a manual tunnel delay, claims the generated
+code and verifies an authenticated public WSS snapshot. It revokes only its new
+test device and closes Host. Existing devices and conversations are preserved.
+
 `npm run check` and `npm run pwa:smoke` cover permission forwarding, durable
 receipts, file boundaries, onboarding, rename, images, reload recovery and bulk
 actions. `node scripts/worker-smoke.mjs` uses the installed signed-in runtime to
@@ -101,7 +141,25 @@ verify that the same execution worker survives a host crash/restart. Set
 `AGENTVIEW_PACKAGED=1` to test the unpacked release payload. The test uses isolated
 Host settings and removes its own processes and temporary files.
 
+After packaging, `node scripts/window-smoke.mjs` checks hidden startup, repeated
+reopening through the managed launcher, minimization, missing-window recreation
+and renderer-crash recovery with an unavailable backend. Each reopen must complete
+within four seconds. Set `AGENTVIEW_PACKAGED_HOST` to test a different unpacked
+Host directory. Windows packaging compiles the small managed launcher with the
+Windows .NET Framework compiler; its source is tracked in `src/launcher`.
+Immediately after installing, before opening Host, run
+`./scripts/installed-window-smoke.ps1 -InstallDirectory <installed-folder>` to
+verify that the first explicit open produces a responsive native Windows window
+without replacing the running network process.
+
 `npx tsx scripts/runtime-smoke.ts` performs a real agent turn with an image and an
-outside-workspace file write, checks zero approval requests under Full access,
+outside-workspace file write, checks unrestricted access with `on-request` on
+start and resume and zero approval requests for that routine write,
 then verifies persisted history and resume from another app-server. It consumes
 account usage and deletes only its newly created test conversation and directory.
+
+After installation, set `AGENTVIEW_LIVE_TEST=1` and `AGENTVIEW_DATA_DIR` to the
+installed Host data directory, then run `npx tsx scripts/installed-permissions-smoke.ts`.
+With Full access selected and an existing paired client, this creates one no-tool
+test turn through the running Host and checks its recorded approval/sandbox policy.
+It removes only that test conversation; existing agents and pairings are preserved.

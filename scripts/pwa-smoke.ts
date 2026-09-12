@@ -9,6 +9,11 @@ import { DatabaseSync } from "node:sqlite";
 import { randomInt, randomBytes } from "node:crypto";
 import { PairingRegistry, type Sql } from "../src/pairing/registry";
 import { HostService, encodeConnection } from "../src/host/service";
+import {
+  installViewportFixture,
+  layoutSmoke,
+  safeAreaSmoke,
+} from "./pwa-layout-smoke";
 
 // Real host TLS, pairing, encryption, storage and browser UI; only the agent
 // runtime is a deterministic fixture. Never uses the developer's vault/account.
@@ -17,6 +22,7 @@ const captures = process.env.AGENTVIEW_PWA_CAPTURES;
 if (captures) await mkdir(captures, { recursive: true });
 const hosts: HostService[] = [];
 let updateVersion = false;
+let readDelay = 0;
 const pairingDb = new DatabaseSync(":memory:");
 const pairingSql: Sql = {
   exec<T>(query: string, ...values: (string | number | null)[]) {
@@ -131,6 +137,7 @@ async function makeHost(name: string) {
             isDefault: true,
             supportedReasoningEfforts: [
               { reasoningEffort: "high", description: "High" },
+              { reasoningEffort: "low", description: "Low" },
             ],
           },
         ],
@@ -199,6 +206,8 @@ async function makeHost(name: string) {
       return { turn };
     }
     if (method === "thread/read") {
+      if (readDelay)
+        await new Promise((resolve) => setTimeout(resolve, readDelay));
       return { thread: fixtureThreads.get(params.threadId) };
     }
     if (method === "thread/turns/list" && fixtureTurns.has(params.threadId))
@@ -217,6 +226,19 @@ async function makeHost(name: string) {
                 id: "message-1",
                 type: "agentMessage",
                 text: `Welcome to ${name}. Your workspace stays on this computer.`,
+              },
+              {
+                id: "long-message",
+                type: "agentMessage",
+                text:
+                  Array.from(
+                    { length: 35 },
+                    (_, i) =>
+                      `Paragraph ${i + 1}. A long conversation should scroll only inside the message panel.`,
+                  ).join("\n\n") +
+                  "\n\n```text\n" +
+                  "wide-output-".repeat(100) +
+                  "\n```",
               },
             ],
           },
@@ -317,6 +339,47 @@ async function expandedWorkspace(page: Page, engine: string) {
     .locator(".chat-heading h3")
     .filter({ hasText: `${engine} renamed chat` })
     .waitFor();
+  // Full access must still deliver explicit approval decisions over the
+  // encrypted connection, including after a client reload.
+  const approvalThread = first
+    .snapshot()
+    .threads.find((thread) => thread.name === `${engine} renamed chat`)!;
+  assert.ok(approvalThread);
+  const originalRespond = first.codex.respond;
+  const decisions: unknown[] = [];
+  first.codex.respond = (_id, result) => {
+    decisions.push(result);
+  };
+  try {
+    for (const [index, button, decision] of [
+      [0, "Decline", "decline"],
+      [1, "Allow", "accept"],
+    ] as const) {
+      first.codex.emit("request", {
+        id: `${engine}-approval-${index}`,
+        method: "item/commandExecution/requestApproval",
+        params: {
+          threadId: approvalThread.id,
+          command: "Write-Output 'AgentView approval fixture'",
+          reason: "Verify the requested action before allowing it.",
+        },
+      });
+      await page.locator(".approval-card").waitFor();
+      if (index === 0) {
+        await page.reload();
+        await page.locator(".approval-card").waitFor();
+      }
+      assert.equal(decisions.length, index, "Never silently approve a request");
+      await page
+        .locator(".approval-card")
+        .getByRole("button", { name: button, exact: true })
+        .click();
+      await page.locator(".approval-card").waitFor({ state: "detached" });
+      assert.deepEqual(decisions[index], { decision });
+    }
+  } finally {
+    first.codex.respond = originalRespond;
+  }
   await page.getByRole("button", { name: "Recovery", exact: true }).click();
   await page.getByText("Saved in the host runtime", { exact: true }).waitFor();
   await page
@@ -385,10 +448,14 @@ try {
     // Production/public-path tests must use normal certificate validation.
     const context = await browser.newContext({
       ...devices["iPhone 13"],
+      // Home Screen dimensions; Safari's device preset reserves browser chrome.
+      viewport: { width: 390, height: 844 },
       ignoreHTTPSErrors: true,
     });
     await context.addInitScript("globalThis.__name = (value) => value");
     const page = await context.newPage();
+    page.setDefaultTimeout(15_000);
+    await installViewportFixture(page);
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
     try {
@@ -568,9 +635,43 @@ try {
         ),
         "No horizontal overflow",
       );
+      await layoutSmoke(page, engine.name(), captures);
+      await safeAreaSmoke(page, engine.name(), captures);
+      const lastMessage = page.getByText(
+        "Welcome to First. Your workspace stays on this computer.",
+      );
+      readDelay = 1500;
       await context.setOffline(true);
       await page.locator(".connection-pill.lost").waitFor();
+      assert.equal(
+        await lastMessage.count(),
+        1,
+        "Keep the conversation while disconnected",
+      );
       await context.setOffline(false);
+      await page.getByText("Updating...", { exact: true }).waitFor();
+      assert.equal(
+        await lastMessage.count(),
+        1,
+        "Keep the conversation during a slow foreground refresh",
+      );
+      assert.equal(
+        await page.getByText("Opening conversation", { exact: true }).count(),
+        0,
+      );
+      assert.equal(
+        await page.getByText("Disconnected.", { exact: true }).count(),
+        0,
+        "Expected suspension uses the refresh indicator, not an error toast",
+      );
+      if (captures)
+        await page.screenshot({
+          path: path.join(captures, `${engine.name()}-updating.png`),
+        });
+      await page
+        .getByText("Updating...", { exact: true })
+        .waitFor({ state: "hidden" });
+      readDelay = 0;
       await page
         .locator(".connection-pill:not(.lost)")
         .waitFor({ timeout: 20_000 });

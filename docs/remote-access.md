@@ -14,9 +14,9 @@ encrypted host proof without redeeming the invitation. An optional QR opens the
 PWA with the code filled in; scanning is no longer required. Generating
 another invitation invalidates the previous unused invitation. Successful pairing
 replaces it with an independent random credential, stored using Windows
-safeStorage or Android Keystore. Host lists paired devices and can remove one
-without changing other devices' credentials. Removing access closes active
-sessions. Each host supports up to 100 paired devices. Windows/native Android
+safeStorage or encrypted browser-local storage. Host lists paired devices and can
+remove one without changing other devices' credentials. Removing access closes active
+sessions. Each host supports up to 100 paired devices. Windows
 clients retain full invitations under **Older clients and local pairing**.
 
 Six-digit discovery uses `app.hardline-labs.com/api/pair`, a trusted Cloudflare
@@ -83,9 +83,17 @@ address, credential or shared runtime.
 
 ## Cloudflare Tunnel
 
+Host prefills an empty **Remote endpoint** field with
+`wss://agentview.hardline-labs.com/`. A saved custom endpoint is preserved. Edit
+the field for another host's tunnel or clear it for local-only access, then save
+settings to apply. Opening the form does not change the active configuration;
+an empty field is prefilled again the next time the window loads. The Hardline
+Labs address requires a tunnel routed to that Host; prefilling it does not
+provision a tunnel for another computer.
+
 Remote traffic goes from the client through a dedicated Cloudflare hostname and
 outbound tunnel to the host. The website application does not process these
-messages. Tunnel credentials stay on the host, never in Android or desktop
+messages. Tunnel credentials stay on the host, never in browser or desktop
 clients. Local traffic does not use Cloudflare. Six-digit discovery adds a Worker
 and SQLite Durable Object on the existing web deployment. It does not relay
 workspace messages. The configuration uses resources available on the free plan;

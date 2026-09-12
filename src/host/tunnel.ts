@@ -6,6 +6,39 @@ export class HostTunnel extends EventEmitter {
   private process?: ChildProcess;
   private restart?: NodeJS.Timeout;
   private stopped = false;
+  async ready(timeout = 25_000) {
+    if (this.status === "Connected") return;
+    if (this.status === "Not configured") return; // Externally managed endpoints remain supported.
+    await new Promise<void>((resolve, reject) => {
+      const finish = (error?: Error) => {
+        clearTimeout(timer);
+        this.off("status", check);
+        error ? reject(error) : resolve();
+      };
+      const check = () => {
+        if (this.status === "Connected") finish();
+        else if (this.status.startsWith("Tunnel could not start"))
+          finish(new Error(this.status));
+        else if (this.stopped)
+          finish(
+            new Error(
+              "Host stopped while connecting. Open Host and try pairing again.",
+            ),
+          );
+      };
+      const timer = setTimeout(
+        () =>
+          finish(
+            new Error(
+              "The tunnel is still offline. Check this PC's internet connection and Remote access, then try Pair device again.",
+            ),
+          ),
+        timeout,
+      );
+      this.on("status", check);
+      check();
+    });
+  }
   start(executable: string, config: string) {
     if (!config || !executable || this.stopped) return;
     this.status = "Connecting";
@@ -41,5 +74,6 @@ export class HostTunnel extends EventEmitter {
     this.stopped = true;
     clearTimeout(this.restart);
     this.process?.kill();
+    this.emit("status");
   }
 }

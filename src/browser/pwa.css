@@ -1,7 +1,140 @@
-.browser-app {
+.pwa-document,
+.pwa-document body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background-color: #0c141a;
+}
+.pwa-document {
+  --pwa-safe-top: env(safe-area-inset-top, 0px);
+  --pwa-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --pwa-top-space: max(0px, calc(var(--pwa-safe-top) - var(--app-top, 0px)));
+  --pwa-bottom-space: var(--pwa-safe-bottom);
+}
+.pwa-document.pwa-keyboard {
+  --pwa-bottom-space: 0px;
+}
+.pwa-document.pwa-standalone,
+.pwa-document.pwa-standalone body {
+  /* Percent heights can omit the status area in an installed iOS app. */
+  height: 100vh;
+}
+.pwa-document body {
+  position: fixed;
+  inset: 0;
+}
+.pwa-document #root {
+  position: fixed;
+  inset: 0 0 auto;
   height: var(--app-height, 100dvh);
+  /* Establish one visible-viewport containing block, including fixed drawers. */
+  transform: translateY(var(--app-top, 0px));
+  overflow: hidden;
+}
+.browser-app {
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
   position: relative;
-  top: var(--app-top, 0px);
+  overflow: hidden;
+  padding-top: var(--pwa-top-space);
+  padding-right: env(safe-area-inset-right, 0px);
+  padding-bottom: var(--pwa-bottom-space);
+  padding-left: env(safe-area-inset-left, 0px);
+}
+.pwa-keyboard .browser-app {
+  padding-bottom: 0;
+}
+.browser-app .workspace,
+.browser-app .chat-panel {
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.browser-app .chat-scroll,
+.browser-app .composer textarea,
+.browser-app .connect-page,
+.browser-app .sidebar,
+.browser-app .thread-list,
+.browser-app .settings-modal,
+.browser-app .install-card,
+.browser-app .palette-results,
+.browser-app .note-body,
+.browser-app .activity-drawer {
+  overscroll-behavior: contain;
+}
+.browser-app pre {
+  overscroll-behavior-x: contain;
+}
+.browser-app .chat-scroll {
+  scroll-behavior: auto;
+  overflow-x: hidden;
+  overflow-wrap: anywhere;
+}
+.browser-app .composer-area {
+  flex: 0 0 auto;
+  min-height: 0;
+  max-height: calc(100% - 64px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.browser-app .composer textarea {
+  display: block;
+  resize: none;
+}
+.browser-app .message-attachments {
+  max-height: 100px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.browser-app .rename-chat,
+.browser-app .recovery-card,
+.browser-app .clear-confirm {
+  flex-shrink: 0;
+  max-height: 35%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.browser-app .model-controls {
+  flex: 1;
+  overflow: hidden;
+}
+.browser-app .model-controls select {
+  min-width: 0;
+}
+.browser-app .modal-backdrop {
+  position: absolute;
+  inset: 0;
+  padding: 12px;
+  padding-top: max(12px, env(safe-area-inset-top, 0px));
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+}
+.pwa-keyboard .browser-app .modal-backdrop {
+  padding-bottom: 12px;
+}
+.browser-app .settings-modal,
+.browser-app .install-card,
+.browser-app .command-palette {
+  max-height: 100%;
+  min-height: 0;
+}
+.browser-app .command-palette {
+  display: flex;
+  flex-direction: column;
+}
+.browser-app .palette-input {
+  flex-shrink: 0;
+}
+.browser-app .palette-input input {
+  min-width: 0;
+}
+.browser-app .palette-results {
+  min-height: 0;
+}
+.browser-app .scanner-backdrop {
+  position: absolute;
+  overscroll-behavior: contain;
 }
 .browser-app .window-bar {
   display: none;
@@ -213,27 +346,10 @@
   }
 }
 
-@media (max-height: 510px) and (pointer: coarse) {
-  .browser-app .chat-heading {
-    display: none;
-  }
-  .browser-app .chat-scroll {
-    padding-top: 8px;
-    padding-bottom: 8px;
-  }
-  .browser-app .composer textarea {
-    height: 44px;
-    min-height: 44px;
-    max-height: 44px;
-    padding-top: 8px;
-  }
-}
-
 .web-pairing-icon {
   display: none;
 }
 .browser-app .settings-modal {
-  max-height: calc(100dvh - 40px);
   overflow-y: auto;
 }
 .workspace-tools {
@@ -434,6 +550,67 @@
   height: 18px;
 }
 @media (max-width: 760px), (pointer: coarse) and (max-width: 1024px) {
+  .browser-app .sidebar {
+    top: 0;
+    bottom: 0;
+    padding-top: max(20px, env(safe-area-inset-top, 0px));
+    padding-bottom: max(14px, env(safe-area-inset-bottom, 0px));
+    overflow-y: auto;
+  }
+  .browser-app .sidebar > * {
+    flex-shrink: 0;
+  }
+  .browser-app .sidebar .thread-list {
+    flex: 1 0 auto;
+    overflow: visible;
+  }
+  .pwa-compact .browser-app .app-header {
+    height: 44px;
+  }
+  .pwa-compact .browser-app .chat-heading,
+  .pwa-compact .browser-app .composer-foot {
+    display: none;
+  }
+  .pwa-compact .browser-app .mobile-live {
+    min-height: 29px;
+  }
+  .pwa-compact .browser-app .chat-scroll {
+    padding: 10px 14px;
+  }
+  .pwa-compact .browser-app .context-usage {
+    flex-shrink: 0;
+    padding: 5px 14px;
+  }
+  .pwa-compact .browser-app .context-usage small {
+    display: none;
+  }
+  .pwa-compact .browser-app .branch-hint {
+    padding: 2px 0;
+    margin-bottom: 5px;
+  }
+  .pwa-compact .browser-app .composer textarea {
+    height: 40px;
+    min-height: 40px;
+    max-height: 40px;
+    padding-top: 8px;
+  }
+  .pwa-compact .browser-app .chat-management {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 8px;
+    padding: 4px 12px;
+    flex-shrink: 0;
+  }
+  .pwa-compact .browser-app .chat-management button {
+    flex-shrink: 0;
+  }
+  .pwa-compact .browser-app .pwa-bar > span {
+    display: none;
+  }
+  .pwa-compact .browser-app .pwa-bar {
+    justify-content: flex-end;
+    padding: 2px 12px;
+  }
   .web-pairing-icon {
     display: block;
     margin-bottom: 20px;
@@ -461,5 +638,228 @@
   }
   .browser-app .connect-foot {
     font-size: 12px;
+  }
+}
+/* PWA-only layout; native clients keep their existing controls and density. */
+.pwa-viewport-measure {
+  position: fixed;
+  top: 0;
+  width: 0;
+  height: 100dvh;
+  visibility: hidden;
+  pointer-events: none;
+}
+.pwa-standalone .pwa-viewport-measure {
+  /* Use an explicit viewport height; stretching to bottom: 0 can end short. */
+  height: 100vh;
+}
+.browser-app .context-compact {
+  flex: 0 0 auto;
+  position: relative;
+  border-bottom: 1px solid var(--line);
+  color: #9eb6b7;
+  font-size: 11px;
+}
+.browser-app .context-compact summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  padding: 5px 16px;
+  cursor: pointer;
+  list-style: none;
+}
+.browser-app .context-compact summary::-webkit-details-marker {
+  display: none;
+}
+.browser-app .context-compact summary::after {
+  content: "\25be";
+}
+.browser-app .context-compact[open] summary::after {
+  content: "\25b4";
+}
+.browser-app .context-compact meter {
+  flex: 1;
+  height: 4px;
+  margin: 0;
+}
+.browser-app .context-compact > div {
+  position: absolute;
+  z-index: 30;
+  left: 10px;
+  right: 10px;
+  top: 100%;
+  padding: 10px 14px;
+  border: 1px solid #30433e;
+  border-radius: 0 0 12px 12px;
+  background: #142128;
+  box-shadow: 0 12px 24px #0005;
+  max-height: min(200px, 35vh);
+  overflow-y: auto;
+}
+.browser-app .context-compact p {
+  margin: 4px 0;
+  line-height: 1.5;
+}
+.browser-app .context-compact .usage-high {
+  color: #d9c491;
+}
+.browser-app .conversation-updating {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 20px;
+  padding: 0 4px 5px;
+  font-size: 11px;
+  color: #9cbab2;
+}
+.browser-app .choice-trigger {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 40px;
+  max-width: 180px;
+  padding: 5px;
+  color: #abc5c9;
+  background: transparent;
+  font-size: 12px;
+}
+.browser-app .choice-trigger span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.browser-app .choice-trigger svg {
+  flex-shrink: 0;
+}
+.browser-app .choice-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 12px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  background: #03080baa;
+}
+.browser-app .choice-dialog {
+  width: min(440px, 100%);
+  max-height: calc(100% - 16px);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #426056;
+  border-radius: 18px;
+  background: #142128;
+  box-shadow: 0 20px 80px #0008;
+}
+.browser-app .choice-dialog header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px 8px 18px;
+}
+.browser-app .choice-dialog header button {
+  min-height: 44px;
+  min-width: 44px;
+}
+.browser-app .choice-dialog [role="listbox"] {
+  padding: 0 8px 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.browser-app .choice-dialog [role="option"] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 12px;
+  text-align: left;
+  font-size: 16px;
+  border-radius: 10px;
+}
+.browser-app .choice-dialog [aria-selected="true"] {
+  background: #a8ddc51b;
+}
+.browser-app .composer textarea {
+  min-height: 40px;
+  max-height: min(128px, calc(var(--app-height, 100dvh) * 0.22));
+  padding: 8px 12px 4px;
+  line-height: 1.5;
+}
+@media (max-width: 760px), (pointer: coarse) and (max-width: 1024px) {
+  .browser-app .app-header {
+    height: 48px;
+  }
+  .browser-app > .pwa-bar {
+    margin-top: calc(-1 * var(--pwa-top-space));
+    padding-top: calc(8px + var(--pwa-top-space));
+  }
+  .browser-app:not(:has(> .pwa-bar)):not(:has(> .pwa-error)) > .app-header {
+    /* Paint the header into the notch area; keep its controls below it. */
+    margin-top: calc(-1 * var(--pwa-top-space));
+    padding-top: var(--pwa-top-space);
+    height: calc(48px + var(--pwa-top-space));
+  }
+  .pwa-compact
+    .browser-app:not(:has(> .pwa-bar)):not(:has(> .pwa-error))
+    > .app-header {
+    height: calc(44px + var(--pwa-top-space));
+  }
+  .browser-app .mobile-live {
+    min-height: 30px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+  .browser-app .chat-heading {
+    height: 46px;
+    min-height: 46px;
+    padding: 0 14px;
+  }
+  .browser-app .chat-heading .eyebrow {
+    display: none;
+  }
+  .browser-app .chat-management {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 3px 12px;
+    gap: 12px;
+    min-height: 34px;
+  }
+  .browser-app .chat-management button {
+    flex-shrink: 0;
+    min-height: 30px;
+  }
+  .browser-app .composer-area {
+    /* Extend the surface, not the buttons, into the home-indicator area. */
+    padding: 5px 10px max(4px, var(--pwa-bottom-space));
+  }
+  .browser-app.phone-chat:has(.chat-panel) {
+    padding-bottom: 0;
+  }
+  .browser-app .composer-bottom {
+    padding: 0 6px 5px;
+    gap: 4px;
+  }
+  .browser-app .composer-foot {
+    display: none;
+  }
+  .browser-app .model-controls {
+    max-width: none;
+  }
+  .browser-app .choice-trigger:first-child {
+    flex: 1;
+  }
+  .pwa-compact .browser-app .composer textarea {
+    min-height: 40px;
+    max-height: min(100px, calc(var(--app-height, 100dvh) * 0.18));
+    padding-top: 8px;
+  }
+  .pwa-keyboard .browser-app .pwa-bar {
+    display: none;
   }
 }

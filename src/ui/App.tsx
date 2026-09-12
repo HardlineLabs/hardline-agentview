@@ -41,7 +41,6 @@ import { Chat, Markdown } from "./Chat";
 import {
   ago,
   bridge,
-  mobile,
   browser,
   colors,
   domainLabel,
@@ -90,7 +89,7 @@ export function Mark({ size = 28 }: { size?: number }) {
   );
 }
 function WindowBar() {
-  if (mobile) return null;
+  if (browser) return null;
   return (
     <div className="window-bar">
       <div className="window-caption">
@@ -174,7 +173,11 @@ function HostApp() {
   useEffect(() => {
     void invoke("host.status").then((s) => {
       setStatus(s);
-      setForm(s.settings);
+      setForm({
+        ...s.settings,
+        remoteAddress:
+          s.settings.remoteAddress || "wss://agentview.hardline-labs.com/",
+      });
     });
     return subscribe((e) => {
       if (e.type === "hostStatus") setStatus(e.status);
@@ -282,10 +285,10 @@ function HostApp() {
                   }
                 />
                 <small>
-                  Use your host’s secure tunnel address. Local connections stay
-                  direct.
-                  {status?.remoteStatus &&
-                  status.remoteStatus !== "Not configured"
+                  The Hardline Labs address is prefilled. Use the secure tunnel
+                  address that routes to this Host, or clear it for local-only
+                  access. Save settings to apply.
+                  {status?.remoteStatus
                     ? ` Tunnel: ${status.remoteStatus}.`
                     : ""}
                 </small>
@@ -419,8 +422,8 @@ function HostApp() {
           <details className="host-advanced">
             <summary>Older clients and local pairing</summary>
             <p>
-              Windows and native Android clients use a full invitation. A
-              LAN-only invitation cannot connect the iPhone web app.
+              Windows clients use a full invitation. A LAN-only invitation
+              cannot connect the iPhone web app.
             </p>
             <button
               className="secondary"
@@ -669,29 +672,6 @@ function Connect({
               </button>
             </details>
           )}
-          {mobile && !browser && (
-            <button
-              type="button"
-              className="scan-pairing secondary"
-              disabled={connecting}
-              onClick={async () => {
-                setScanError("");
-                if (browser) {
-                  setScanning(true);
-                  return;
-                }
-                try {
-                  const result = await invoke("connection.scan");
-                  setCode(result.value);
-                  onConnect(result.value, "", routePreference);
-                } catch (e: any) {
-                  setScanError(e.message);
-                }
-              }}
-            >
-              <QrCode size={20} /> Scan pairing invitation
-            </button>
-          )}
           {!browser && (
             <>
               <label>Pairing invitation</label>
@@ -800,19 +780,30 @@ function ClientApp() {
     if (browser) void saveDrafts(selectedThread).catch(() => {});
   }, [selectedThread]);
   threadRef.current = selectedThread;
+  const recentPages = useRef(new Map<string, ChatPage>());
+  useEffect(() => {
+    if (!browser || !page) return;
+    recentPages.current.delete(page.thread.id);
+    recentPages.current.set(page.thread.id, page);
+    if (recentPages.current.size > 5)
+      recentPages.current.delete(recentPages.current.keys().next().value!);
+  }, [page]);
   const readGeneration = useRef(0);
   const noteGeneration = useRef(0);
   const notify = (message: string) => setToast(message);
-  const readThread = async (id: string, more = false) => {
+  const readThread = async (id: string, more = false, refresh = false) => {
     const generation = ++readGeneration.current;
     if (!more) {
+      if (browser) threadRef.current = id;
       setSelectedThread(id);
-      setPage(undefined);
+      setPage(browser ? recentPages.current.get(id) : undefined);
       setLoading(true);
     }
-    setChatOpen(true);
-    setPhoneView("chat");
-    setDrawer(false);
+    if (!browser || !refresh) {
+      setChatOpen(true);
+      setPhoneView("chat");
+      setDrawer(false);
+    }
     try {
       const result: ChatPage = await invoke("thread.read", {
         id,
@@ -833,7 +824,11 @@ function ClientApp() {
           : result,
       );
     } catch (e: any) {
-      if (generation === readGeneration.current) notify(e.message);
+      if (
+        generation === readGeneration.current &&
+        !(browser && e.message === "Disconnected.")
+      )
+        notify(e.message);
     } finally {
       if (generation === readGeneration.current) setLoading(false);
     }
@@ -853,8 +848,8 @@ function ClientApp() {
         if (linkedThread) {
           history.replaceState(null, "", location.pathname);
           void readThread(linkedThread);
-        }
-        if (threadRef.current) void readThread(threadRef.current);
+        } else if (threadRef.current)
+          void readThread(threadRef.current, false, true);
       }
       if (event.type === "preferences")
         setSnapshot((s) => (s ? { ...s, preferences: event.preferences } : s));
@@ -897,6 +892,8 @@ function ClientApp() {
             : old,
         );
       }
+      if (browser && event.type === "threadChanged")
+        recentPages.current.delete(event.threadId);
       if (
         event.type === "threadChanged" &&
         event.threadId === threadRef.current
@@ -1014,18 +1011,6 @@ function ClientApp() {
     setPhoneView("chat");
     setDrawer(false);
   };
-  useEffect(() => {
-    const back = () => {
-      if (palette) setPalette(false);
-      else if (settingsOpen) setSettingsOpen(false);
-      else if (drawer) setDrawer(false);
-      else if (selected) setSelected(undefined);
-      else if (activityOpen) setActivityOpen(false);
-      else setPhoneView("chat");
-    };
-    window.addEventListener("agentview:back", back);
-    return () => window.removeEventListener("agentview:back", back);
-  }, [palette, settingsOpen, drawer, selected, activityOpen]);
   const connected = connection === "connected";
   const g = snapshot?.graph || emptyGraph;
   const currentThread =
@@ -1063,7 +1048,7 @@ function ClientApp() {
   };
   return (
     <div
-      className={`client-app ${browser ? "browser-app" : ""} phone-${phoneView} ${drawer ? "drawer-open" : ""} ${mobile ? "native-mobile" : ""}`}
+      className={`client-app ${browser ? "browser-app" : ""} phone-${phoneView} ${drawer ? "drawer-open" : ""}`}
     >
       <WindowBar />
       {browser && <PwaControls selectedThread={selectedThread} />}
@@ -1600,7 +1585,7 @@ function ClientApp() {
                 </div>
               )}
             </main>
-            {(chatOpen || mobile) && (
+            {(chatOpen || browser) && (
               <Chat
                 expanded={browser && Boolean(snapshot.capabilities)}
                 onboarding={snapshot.preferences?.onboarding}
@@ -1717,7 +1702,7 @@ function ClientApp() {
             </div>
             <p className="settings-help">
               {browser
-                ? "This web app connects through your host�s secure remote endpoint. Device pairing is stored in this browser. Remove this device from Host to revoke access."
+                ? "This web app connects through your host's secure remote endpoint. Device pairing is stored in this browser. Remove this device from Host to revoke access."
                 : "Local connections go directly to your paired host. Remote sessions use its secure endpoint. Remove this device from Host to revoke access."}
             </p>
             <button
@@ -1725,6 +1710,7 @@ function ClientApp() {
               onClick={async () => {
                 try {
                   await invoke("connection.disconnect");
+                  recentPages.current.clear();
                   ++readGeneration.current;
                   ++noteGeneration.current;
                   setSnapshot(undefined);

@@ -1,7 +1,7 @@
 # AgentView on iPhone and the web
 
 The PWA shares AgentView's React interface, graph and encrypted workspace protocol
-with the Android and Windows clients. Its static deployment delivers application
+with the Windows client. Its static deployment delivers application
 files. Each phone pairs with its own Windows host; that host retains its vault,
 repositories, agent sign-in and execution. There is no shared hosted agent account.
 
@@ -41,7 +41,7 @@ can revoke one phone without affecting other devices. Every paired device has fu
 access to that host's workspace.
 
 Saved pairing is encrypted in IndexedDB with a non-exportable Web Crypto key.
-This is browser-origin protection, not Android Keystore or an iOS Keychain promise:
+This is browser-origin protection, not an OS keychain promise:
 code running on the app's origin can use that key. Use a trusted device. Clearing
 website data removes pairing; create a fresh invitation afterward. **Disconnect &
 change host** clears this browser's saved pairing, drafts, attachment previews and
@@ -84,6 +84,47 @@ workspace files are omitted. Tapping a notification opens its conversation.
 The PC and network Host must be online. Delivery is best effort; inbox/history
 remain available without push. **Disable notifications** removes this subscription.
 
+## Screen, scrolling and keyboard
+
+The browser shell fills the visible screen, including in Home Screen mode, with
+space for the iPhone's notch and home indicator. Chat, the conversation drawer and
+dialogs scroll within their own boundaries. Reaching the end of a conversation
+does not scroll the app into blank space; code blocks still allow sideways reading
+without trapping vertical chat scrolling.
+
+An installed app sizes its document and measures its baseline with explicit `100vh`,
+instead of percentage heights or stretching a fixed frame between top and bottom.
+Browser tabs continue using the dynamic viewport to respect Safari's toolbars. Header and composer
+surfaces extend into the safe areas, while their controls clear the notch and home
+indicator. Bottom spacing uses the larger of the normal margin and the safe inset,
+instead of adding both. While editing,
+the visual viewport resizes the shell and its dialogs above the keyboard. Focus
+transitions are followed briefly to handle delayed Safari geometry before the first
+keystroke, without preserving stale offsets after a picker or app switch. Model and
+effort choices open inside the app. Short screens use compact controls. When reading
+the latest messages, chat stays at the bottom as the keyboard changes; when reading
+older messages, it keeps that position. Long drafts and attachment lists scroll
+within bounded composer areas. The composer starts at one line and grows with the
+draft. A thin **Context** meter expands on tap to show token counts and guidance.
+Pinch zoom remains available.
+
+During brief app switches or reconnects, the browser keeps the last known messages
+visible and shows a small **Updating** indicator above the composer while refreshing.
+Up to five recently opened conversations stay in memory for the current session;
+transcripts are not written to browser storage. A cold reload or an app discarded by
+iOS still needs to retrieve its conversation from the Host.
+
+WebKit has [reported viewport-height errors](https://bugs.webkit.org/show_bug.cgi?id=254868)
+in installed apps that exclude safe areas from some height measurements. Applying
+safe-area padding inside an already reduced height leaves unnecessary space.
+The explicit standalone baseline avoids relying on an inset-reduced fixed frame.
+This workaround still requires physical iPhone validation. The PWA already requests
+`viewport-fit=cover` and a translucent status bar, following
+[Apple's safe-area guidance](https://webkit.org/blog/7929/designing-websites-for-iphone-x/).
+Some iOS versions also have a separate [system-owned status-strip bug](https://bugs.webkit.org/show_bug.cgi?id=301994).
+CSS cannot draw outside the viewport iOS grants the app; forcing `screen.height`
+would put controls offscreen. The system clock and home indicator are not hidden.
+
 ## Updates
 
 The app checks for updates when opened, returned to the foreground, brought online
@@ -107,7 +148,7 @@ npm run pwa:smoke
 `npm run pwa:dev` serves the browser target locally. `pwa:build` emits only public
 client assets into `dist/client`, including a content-versioned service worker and
 install icons. Cloudflare Workers Static Assets serves the `hardline-agentview`
-application at `app.hardline-labs.com`; source remains in this private repository.
+application at `app.hardline-labs.com`; source is in this public repository.
 To publish, build and validate the intended revision, sign into Wrangler for the
 owning Cloudflare account, then run `npx wrangler deploy`. The tracked
 `wrangler.jsonc` publishes the complete static build plus the six-digit pairing
@@ -125,7 +166,19 @@ The smoke check uses ephemeral vaults and actual host TLS/encrypted WebSockets;
 only the agent runtime is a deterministic fixture. Its certificate exemption is
 restricted to the local fixture, never production. Chromium and WebKit checks
 cover pairing, host separation, graph/chat interaction, reconnect, saved-device
-recovery and revocation. Chromium additionally exercises camera-frame QR decoding,
+recovery and revocation. Layout stress checks exercise empty-input focus before
+typing, delayed visual-viewport geometry, scrolling past both ends of long and
+empty chats, wide code blocks, growing/shrinking drafts, repeated model/effort choices,
+slow reconnects with messages retained, repeated drawer/settings/brain changes,
+search, small screens and rotation. Installed-mode checks include nonzero safe insets,
+a shortened fixed frame and a web viewport smaller than the screen. The fixed-frame
+fixture asserts that its bottom offset applies, so production selector specificity
+cannot silently disable the regression condition.
+Synthetic keyboard geometry changes separately
+from the layout viewport; it is a regression test, not a real iOS keyboard.
+Chromium uses wheel input to check scroll routing; mobile WebKit checks DOM scroll
+geometry because Playwright cannot inject wheel input in that mode.
+Chromium additionally exercises camera-frame QR decoding,
 offline shell and update/draft recovery. These do not establish physical iPhone
 camera, keyboard, installation or cellular behavior; verify those on an iPhone.
 

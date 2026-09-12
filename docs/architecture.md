@@ -1,10 +1,9 @@
 # Architecture
 
-AgentView has two Windows entry points, an Android client and an installable PWA
-in one TypeScript project. Android bundles the shared React interface in a Capacitor
-shell with native networking and secure storage. The PWA uses the same interface
-and encrypted protocol through a browser adapter. [Web client](pwa.md) owns its
-installation, device storage, lifecycle and static publishing behavior.
+AgentView has two Windows entry points and an installable PWA in one TypeScript
+project. The PWA uses the shared React interface and encrypted protocol through a
+browser adapter. [Web client](pwa.md) owns installation, device storage, lifecycle
+and static publishing behavior.
 The host is an Electron tray application. The client is an Electron application
 with a React interface and a Canvas/d3-force knowledge graph. Fonts and visual
 assets are bundled; the client does not need an internet connection to render.
@@ -32,7 +31,7 @@ end-to-end encrypted sessions with per-device credentials. See the authoritative
 [remote access guide](remote-access.md) for protocol, pairing, isolation, migration,
 Cloudflare setup and operational boundaries.
 
-The desktop main process owns networking; Android uses its native socket plugin.
+The desktop main process owns networking.
 The PWA uses browser WebSocket with publicly trusted remote TLS. All clients use
 the shared WorkspaceConnection state machine and typed interface bridge.
 Events carry graph snapshots, activity, conversation deltas and approvals. The
@@ -132,8 +131,3 @@ It uses isolated settings and closes only the process trees it creates.
 
 `npm run package` builds two portable Windows executables. Packaging and local
 checks publish nothing. The GitHub workflow validates branches independently.
-
-Android CI builds the debug APK and runs release lint. The physical-device smoke
-checks real native networking, chat/context data, graph pixels and navigation,
-draft retention and secure-storage recovery. An optional configured remote endpoint
-exercises the real public path with LAN made unreachable. See [Android validation](android.md).

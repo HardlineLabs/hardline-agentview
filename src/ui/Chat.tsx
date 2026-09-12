@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ArrowUp,
   Square,
@@ -19,6 +19,7 @@ import {
   ArchiveRestore,
   Trash2,
 } from "lucide-react";
+import { ChoicePicker } from "../browser/ChoicePicker";
 import { ContextUsage } from "./Usage";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -322,6 +323,28 @@ export function Chat(props: Props) {
     if (follow.current && scroll.current)
       scroll.current.scrollTop = scroll.current.scrollHeight;
   }, [props.page, sending]);
+  useEffect(() => {
+    if (!browser || !scroll.current) return;
+    const panel = scroll.current;
+    const observer = new ResizeObserver(() => {
+      // Keep the latest message above the keyboard, unless reading history.
+      if (follow.current && panel.clientHeight)
+        panel.scrollTop = panel.scrollHeight;
+    });
+    observer.observe(panel);
+    return () => observer.disconnect();
+  }, []);
+  useLayoutEffect(() => {
+    if (!browser || !input.current) return;
+    const element = input.current;
+    const resize = () => {
+      element.style.height = "auto";
+      element.style.height = `${element.scrollHeight}px`;
+    };
+    resize();
+    window.addEventListener("resize", resize);
+    return () => window.removeEventListener("resize", resize);
+  }, [text, props.thread?.id]);
   const send = async (onboardingText?: string) => {
     const outgoingText = onboardingText ?? text;
     if (
@@ -377,7 +400,14 @@ export function Chat(props: Props) {
       props.onError(e.message);
     } finally {
       setSending(false);
-      input.current?.focus();
+      if (!browser) input.current?.focus();
+      else if (
+        currentChat.current === draftId &&
+        input.current
+          ?.closest(".composer-area")
+          ?.contains(document.activeElement)
+      )
+        input.current.focus({ preventScroll: true });
     }
   };
   const upload = async (files: FileList | null) => {
@@ -627,7 +657,7 @@ export function Chat(props: Props) {
               </button>
             </div>
           )}
-          <ContextUsage usage={props.thread.usage} />
+          <ContextUsage usage={props.thread.usage} compact={browser} />
         </>
       )}
       <div
@@ -638,7 +668,7 @@ export function Chat(props: Props) {
           follow.current = e.scrollHeight - e.scrollTop - e.clientHeight < 90;
         }}
       >
-        {props.loading ? (
+        {props.loading && (!browser || !props.page) ? (
           <div className="chat-loading">
             <LoaderCircle className="spin" size={18} /> Opening conversation
           </div>
@@ -728,6 +758,14 @@ export function Chat(props: Props) {
           ))}
       </div>
       <div className="composer-area">
+        {browser && props.page && (props.loading || !props.connected) && (
+          <div className="conversation-updating" role="status">
+            <LoaderCircle className="spin" size={12} />
+            {props.connected
+              ? "Updating..."
+              : "Reconnecting - showing last update"}
+          </div>
+        )}
         {props.expanded &&
           props.onboarding?.trim() &&
           !props.loading &&
@@ -832,7 +870,7 @@ export function Chat(props: Props) {
                 void send();
               }
             }}
-            rows={3}
+            rows={browser ? 1 : 3}
           />
           <div className="composer-bottom">
             {props.expanded && (
@@ -846,40 +884,77 @@ export function Chat(props: Props) {
               </button>
             )}
             <div className="model-controls">
-              <select
-                aria-label="Model"
-                disabled={active}
-                value={model}
-                onChange={(e) => {
-                  setModel(e.target.value);
-                  setEffort(
-                    props.models.find((m) => m.id === e.target.value)
-                      ?.defaultReasoningEffort || "high",
-                  );
-                }}
-              >
-                {props.models.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.displayName}
-                  </option>
-                ))}
-              </select>
-              <select
-                aria-label="Reasoning effort"
-                disabled={active}
-                value={effort}
-                onChange={(e) => setEffort(e.target.value)}
-              >
-                {(
-                  currentModel?.supportedReasoningEfforts || [
-                    { reasoningEffort: "high" },
-                  ]
-                ).map((e) => (
-                  <option key={e.reasoningEffort} value={e.reasoningEffort}>
-                    {e.reasoningEffort}
-                  </option>
-                ))}
-              </select>
+              {browser ? (
+                <>
+                  <ChoicePicker
+                    label="Model"
+                    value={model}
+                    disabled={active}
+                    options={props.models.map((m) => ({
+                      value: m.id,
+                      label: m.displayName,
+                    }))}
+                    onChange={(value) => {
+                      setModel(value);
+                      setEffort(
+                        props.models.find((m) => m.id === value)
+                          ?.defaultReasoningEffort || "high",
+                      );
+                    }}
+                  />
+                  <ChoicePicker
+                    label="Reasoning effort"
+                    value={effort}
+                    disabled={active}
+                    options={(
+                      currentModel?.supportedReasoningEfforts || [
+                        { reasoningEffort: "high" },
+                      ]
+                    ).map((e) => ({
+                      value: e.reasoningEffort,
+                      label: e.reasoningEffort,
+                    }))}
+                    onChange={setEffort}
+                  />
+                </>
+              ) : (
+                <>
+                  <select
+                    aria-label="Model"
+                    disabled={active}
+                    value={model}
+                    onChange={(e) => {
+                      setModel(e.target.value);
+                      setEffort(
+                        props.models.find((m) => m.id === e.target.value)
+                          ?.defaultReasoningEffort || "high",
+                      );
+                    }}
+                  >
+                    {props.models.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.displayName}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    aria-label="Reasoning effort"
+                    disabled={active}
+                    value={effort}
+                    onChange={(e) => setEffort(e.target.value)}
+                  >
+                    {(
+                      currentModel?.supportedReasoningEfforts || [
+                        { reasoningEffort: "high" },
+                      ]
+                    ).map((e) => (
+                      <option key={e.reasoningEffort} value={e.reasoningEffort}>
+                        {e.reasoningEffort}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
             </div>
             {active && (
               <button

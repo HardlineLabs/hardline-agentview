@@ -12,7 +12,8 @@ if (-not $hostExecutable.StartsWith($installRoot.TrimEnd('\') + '\', [StringComp
 for ($attempt = 0; $attempt -lt 10; $attempt++) {
     if (Test-Path -LiteralPath (Join-Path $installRoot 'updating.lock')) { exit 0 }
     $existing = Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -eq $hostExecutable -and $_.CommandLine -notlike '*--type=*' -and $_.CommandLine -notlike '*runtime.cjs*' } | Select-Object -First 1
-    $process = if ($existing) { Get-Process -Id $existing.ProcessId } else { Start-Process -FilePath $hostExecutable -ArgumentList @('--role=host', '--hidden') -WindowStyle Hidden -PassThru }
+    # --hidden keeps startup in the tray; an OS-level hidden override blocks the first user reveal.
+    $process = if ($existing) { Get-Process -Id $existing.ProcessId } else { Start-Process -FilePath $hostExecutable -ArgumentList @('--role=host', '--hidden') -WindowStyle Normal -PassThru }
     $process.WaitForExit()
     if ($process.ExitCode -eq 0) { exit 0 }
     $dataRoot = if ($env:AGENTVIEW_DATA_DIR) { $env:AGENTVIEW_DATA_DIR } else { Join-Path $env:APPDATA 'Hardline AgentView Host' }
