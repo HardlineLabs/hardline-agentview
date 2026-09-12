@@ -654,6 +654,11 @@ try {
         await page.getByText("Opening conversation", { exact: true }).count(),
         0,
       );
+      assert.equal(
+        await page.getByText("Disconnected.", { exact: true }).count(),
+        0,
+        "Expected suspension uses the refresh indicator, not an error toast",
+      );
       if (captures)
         await page.screenshot({
           path: path.join(captures, `${engine.name()}-updating.png`),

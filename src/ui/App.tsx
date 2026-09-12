@@ -848,7 +848,11 @@ function ClientApp() {
           : result,
       );
     } catch (e: any) {
-      if (generation === readGeneration.current) notify(e.message);
+      if (
+        generation === readGeneration.current &&
+        !(browser && e.message === "Disconnected.")
+      )
+        notify(e.message);
     } finally {
       if (generation === readGeneration.current) setLoading(false);
     }
