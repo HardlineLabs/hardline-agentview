@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { chromium, webkit, devices, type Page } from "playwright";
 import QRCode from "qrcode";
+import { graphStationSmoke } from "./pwa-graph-smoke";
 import { DatabaseSync } from "node:sqlite";
 import { randomInt, randomBytes } from "node:crypto";
 import { PairingRegistry, type Sql } from "../src/pairing/registry";
@@ -602,6 +603,7 @@ try {
           .getImageData(0, 0, canvas.width, canvas.height).data;
         return pixels.some((value, index) => index % 4 === 3 && value > 80);
       });
+      await graphStationSmoke(page);
       if (captures)
         await page.screenshot({
           animations: "disabled",
