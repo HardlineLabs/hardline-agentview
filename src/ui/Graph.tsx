@@ -106,8 +106,6 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
           aegis: [-180, 160],
           website: [-340, 115],
           "discord-bot": [-80, 190],
-          gamehealth: [-360, -170],
-          faultlab: [60, 200],
         };
         const center = centers[note.domain] || [
           Math.cos(angle) * 270,
