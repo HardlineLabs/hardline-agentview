@@ -92,12 +92,22 @@ dialogs scroll within their own boundaries. Reaching the end of a conversation
 does not scroll the app into blank space; code blocks still allow sideways reading
 without trapping vertical chat scrolling.
 
-Opening or closing the keyboard resizes the shell and its dialogs using the visual
-viewport. Focus transitions are followed briefly to handle delayed Safari geometry
-updates before the first keystroke. Short screens use compact controls. When reading
+The CSS dynamic viewport fills the screen when no keyboard is open. While editing,
+the visual viewport resizes the shell and its dialogs above the keyboard. Focus
+transitions are followed briefly to handle delayed Safari geometry before the first
+keystroke, without preserving stale offsets after a picker or app switch. Model and
+effort choices open inside the app. Short screens use compact controls. When reading
 the latest messages, chat stays at the bottom as the keyboard changes; when reading
 older messages, it keeps that position. Long drafts and attachment lists scroll
-within bounded composer areas. Pinch zoom remains available.
+within bounded composer areas. The composer starts at one line and grows with the
+draft. A thin **Context** meter expands on tap to show token counts and guidance.
+Pinch zoom remains available.
+
+During brief app switches or reconnects, the browser keeps the last known messages
+visible and shows a small **Updating** indicator above the composer while refreshing.
+Up to five recently opened conversations stay in memory for the current session;
+transcripts are not written to browser storage. A cold reload or an app discarded by
+iOS still needs to retrieve its conversation from the Host.
 
 ## Updates
 
@@ -142,7 +152,8 @@ restricted to the local fixture, never production. Chromium and WebKit checks
 cover pairing, host separation, graph/chat interaction, reconnect, saved-device
 recovery and revocation. Layout stress checks exercise empty-input focus before
 typing, delayed visual-viewport geometry, scrolling past both ends of long and
-empty chats, wide code blocks, long drafts, repeated drawer/settings/brain changes,
+empty chats, wide code blocks, growing/shrinking drafts, repeated model/effort choices,
+slow reconnects with messages retained, repeated drawer/settings/brain changes,
 search, small screens and rotation. Synthetic keyboard geometry changes separately
 from the layout viewport; it is a regression test, not a real iOS keyboard.
 Chromium uses wheel input to check scroll routing; mobile WebKit checks DOM scroll

@@ -1,13 +1,51 @@
 import type { AccountLimits, TokenUsage } from "../shared/types";
 
 const number = (value: number) => value.toLocaleString();
-export function ContextUsage({ usage }: { usage?: TokenUsage }) {
+export function ContextUsage({
+  usage,
+  compact = false,
+}: {
+  usage?: TokenUsage;
+  compact?: boolean;
+}) {
   const capacity = usage?.modelContextWindow;
   const used = usage?.last.totalTokens;
   const percent =
     capacity && used != null
       ? Math.min(100, Math.max(0, (used / capacity) * 100))
       : null;
+  if (compact)
+    return (
+      <details className="context-compact">
+        <summary aria-label="Context details">
+          <span>Context</span>
+          <meter
+            min={0}
+            max={100}
+            value={percent ?? 0}
+            aria-label="Context window used"
+          />
+          <span>{percent == null ? "--" : `${Math.round(percent)}%`}</span>
+        </summary>
+        <div>
+          <p>
+            {used == null
+              ? "Usage appears when Codex reports it."
+              : `${number(used)} / ${capacity ? number(capacity) : "unknown limit"} tokens / ${number(usage!.total.totalTokens)} total`}
+          </p>
+          <p>
+            Latest request, including its response. Codex may compact history
+            automatically.
+          </p>
+          {percent != null && percent >= 80 && (
+            <p className="usage-high">
+              Context is filling up. A fresh agent may help keep the next task
+              focused.
+            </p>
+          )}
+        </div>
+      </details>
+    );
   return (
     <div
       className="context-usage"
