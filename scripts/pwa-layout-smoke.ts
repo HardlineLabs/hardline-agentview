@@ -96,6 +96,47 @@ export async function layoutSmoke(
   const draft = await input.inputValue();
   await input.blur();
   await geometry(page, 844);
+  await input.fill("");
+  await input.blur();
+  const compactHeight = (await input.boundingBox())!.height;
+  assert.ok(compactHeight <= 44, "Empty composer stays one line tall");
+  await input.fill("One\nTwo\nThree\nFour");
+  assert.ok(
+    (await input.boundingBox())!.height > compactHeight,
+    "Composer grows with a multiline draft",
+  );
+  await input.fill("");
+  await input.blur();
+  assert.ok(
+    (await input.boundingBox())!.height <= 44,
+    "Clearing a draft shrinks the composer",
+  );
+  assert.ok(
+    (await page.locator(".context-compact").boundingBox())!.height <= 36,
+  );
+  await page.getByLabel("Context details").click();
+  await page
+    .getByText("Latest request, including its response.", { exact: false })
+    .waitFor();
+  await page.getByLabel("Context details").click();
+  for (let repeat = 0; repeat < 3; repeat++) {
+    await page.getByRole("button", { name: "Model", exact: true }).click();
+    await page.getByRole("option", { name: "Test agent", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Reasoning effort", exact: true })
+      .click();
+    await page
+      .getByRole("option", { name: repeat % 2 ? "high" : "low", exact: true })
+      .click();
+    // A stale Safari visual viewport after dismissing a picker must not move the app.
+    await viewport(page, 430, 260);
+    await geometry(page, 844);
+    await viewport(page, null);
+  }
+  if (captures)
+    await page.screenshot({
+      path: path.join(captures, `${engine}-compact-chat.png`),
+    });
   // Empty-input focus, before any typing or viewport event, used to miss the
   // keyboard adjustment. A later geometry change models Safari's animation.
   await input.fill("");
@@ -160,6 +201,9 @@ export async function layoutSmoke(
     await page
       .getByLabel("Default onboarding instruction")
       .fill("Unsubmitted layout test");
+    await page.waitForFunction(() =>
+      document.documentElement.classList.contains("pwa-keyboard"),
+    );
     const bounds = await page.locator(".settings-modal").boundingBox();
     assert.ok(
       bounds && bounds.y >= 20 && bounds.y + bounds.height <= 411,
@@ -190,6 +234,9 @@ export async function layoutSmoke(
   await page.locator(".search-trigger").click();
   await viewport(page, 360, 30);
   await page.getByPlaceholder("Find a note or conversation…").fill("First");
+  await page.waitForFunction(() =>
+    document.documentElement.classList.contains("pwa-keyboard"),
+  );
   const palette = await page.locator(".command-palette").boundingBox();
   assert.ok(
     palette && palette.y >= 30 && palette.y + palette.height <= 391,

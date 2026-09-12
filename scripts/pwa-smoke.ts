@@ -18,6 +18,7 @@ const captures = process.env.AGENTVIEW_PWA_CAPTURES;
 if (captures) await mkdir(captures, { recursive: true });
 const hosts: HostService[] = [];
 let updateVersion = false;
+let readDelay = 0;
 const pairingDb = new DatabaseSync(":memory:");
 const pairingSql: Sql = {
   exec<T>(query: string, ...values: (string | number | null)[]) {
@@ -132,6 +133,7 @@ async function makeHost(name: string) {
             isDefault: true,
             supportedReasoningEfforts: [
               { reasoningEffort: "high", description: "High" },
+              { reasoningEffort: "low", description: "Low" },
             ],
           },
         ],
@@ -200,6 +202,8 @@ async function makeHost(name: string) {
       return { turn };
     }
     if (method === "thread/read") {
+      if (readDelay)
+        await new Promise((resolve) => setTimeout(resolve, readDelay));
       return { thread: fixtureThreads.get(params.threadId) };
     }
     if (method === "thread/turns/list" && fixtureTurns.has(params.threadId))
@@ -440,6 +444,8 @@ try {
     // Production/public-path tests must use normal certificate validation.
     const context = await browser.newContext({
       ...devices["iPhone 13"],
+      // Home Screen dimensions; Safari's device preset reserves browser chrome.
+      viewport: { width: 390, height: 844 },
       ignoreHTTPSErrors: true,
     });
     await context.addInitScript("globalThis.__name = (value) => value");
@@ -626,9 +632,41 @@ try {
         "No horizontal overflow",
       );
       await layoutSmoke(page, engine.name(), captures);
+      const lastMessage = page.getByText(
+        "Welcome to First. Your workspace stays on this computer.",
+      );
+      readDelay = 1500;
       await context.setOffline(true);
       await page.locator(".connection-pill.lost").waitFor();
+      assert.equal(
+        await lastMessage.count(),
+        1,
+        "Keep the conversation while disconnected",
+      );
       await context.setOffline(false);
+      await page.getByText("Updating...", { exact: true }).waitFor();
+      assert.equal(
+        await lastMessage.count(),
+        1,
+        "Keep the conversation during a slow foreground refresh",
+      );
+      assert.equal(
+        await page.getByText("Opening conversation", { exact: true }).count(),
+        0,
+      );
+      assert.equal(
+        await page.getByText("Disconnected.", { exact: true }).count(),
+        0,
+        "Expected suspension uses the refresh indicator, not an error toast",
+      );
+      if (captures)
+        await page.screenshot({
+          path: path.join(captures, `${engine.name()}-updating.png`),
+        });
+      await page
+        .getByText("Updating...", { exact: true })
+        .waitFor({ state: "hidden" });
+      readDelay = 0;
       await page
         .locator(".connection-pill:not(.lost)")
         .waitFor({ timeout: 20_000 });

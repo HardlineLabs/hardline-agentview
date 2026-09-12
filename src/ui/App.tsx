@@ -804,19 +804,30 @@ function ClientApp() {
     if (browser) void saveDrafts(selectedThread).catch(() => {});
   }, [selectedThread]);
   threadRef.current = selectedThread;
+  const recentPages = useRef(new Map<string, ChatPage>());
+  useEffect(() => {
+    if (!browser || !page) return;
+    recentPages.current.delete(page.thread.id);
+    recentPages.current.set(page.thread.id, page);
+    if (recentPages.current.size > 5)
+      recentPages.current.delete(recentPages.current.keys().next().value!);
+  }, [page]);
   const readGeneration = useRef(0);
   const noteGeneration = useRef(0);
   const notify = (message: string) => setToast(message);
-  const readThread = async (id: string, more = false) => {
+  const readThread = async (id: string, more = false, refresh = false) => {
     const generation = ++readGeneration.current;
     if (!more) {
+      if (browser) threadRef.current = id;
       setSelectedThread(id);
-      setPage(undefined);
+      setPage(browser ? recentPages.current.get(id) : undefined);
       setLoading(true);
     }
-    setChatOpen(true);
-    setPhoneView("chat");
-    setDrawer(false);
+    if (!browser || !refresh) {
+      setChatOpen(true);
+      setPhoneView("chat");
+      setDrawer(false);
+    }
     try {
       const result: ChatPage = await invoke("thread.read", {
         id,
@@ -837,7 +848,11 @@ function ClientApp() {
           : result,
       );
     } catch (e: any) {
-      if (generation === readGeneration.current) notify(e.message);
+      if (
+        generation === readGeneration.current &&
+        !(browser && e.message === "Disconnected.")
+      )
+        notify(e.message);
     } finally {
       if (generation === readGeneration.current) setLoading(false);
     }
@@ -857,8 +872,8 @@ function ClientApp() {
         if (linkedThread) {
           history.replaceState(null, "", location.pathname);
           void readThread(linkedThread);
-        }
-        if (threadRef.current) void readThread(threadRef.current);
+        } else if (threadRef.current)
+          void readThread(threadRef.current, false, true);
       }
       if (event.type === "preferences")
         setSnapshot((s) => (s ? { ...s, preferences: event.preferences } : s));
@@ -901,6 +916,8 @@ function ClientApp() {
             : old,
         );
       }
+      if (browser && event.type === "threadChanged")
+        recentPages.current.delete(event.threadId);
       if (
         event.type === "threadChanged" &&
         event.threadId === threadRef.current
@@ -1721,7 +1738,7 @@ function ClientApp() {
             </div>
             <p className="settings-help">
               {browser
-                ? "This web app connects through your host�s secure remote endpoint. Device pairing is stored in this browser. Remove this device from Host to revoke access."
+                ? "This web app connects through your host's secure remote endpoint. Device pairing is stored in this browser. Remove this device from Host to revoke access."
                 : "Local connections go directly to your paired host. Remote sessions use its secure endpoint. Remove this device from Host to revoke access."}
             </p>
             <button
@@ -1729,6 +1746,7 @@ function ClientApp() {
               onClick={async () => {
                 try {
                   await invoke("connection.disconnect");
+                  recentPages.current.clear();
                   ++readGeneration.current;
                   ++noteGeneration.current;
                   setSnapshot(undefined);

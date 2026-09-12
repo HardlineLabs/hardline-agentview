@@ -628,3 +628,203 @@
     font-size: 12px;
   }
 }
+/* PWA-only layout; native clients keep their existing controls and density. */
+.pwa-viewport-measure {
+  position: fixed;
+  top: 0;
+  width: 0;
+  height: 100dvh;
+  visibility: hidden;
+  pointer-events: none;
+}
+.browser-app .context-compact {
+  flex: 0 0 auto;
+  position: relative;
+  border-bottom: 1px solid var(--line);
+  color: #9eb6b7;
+  font-size: 11px;
+}
+.browser-app .context-compact summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  padding: 5px 16px;
+  cursor: pointer;
+  list-style: none;
+}
+.browser-app .context-compact summary::-webkit-details-marker {
+  display: none;
+}
+.browser-app .context-compact summary::after {
+  content: "\25be";
+}
+.browser-app .context-compact[open] summary::after {
+  content: "\25b4";
+}
+.browser-app .context-compact meter {
+  flex: 1;
+  height: 4px;
+  margin: 0;
+}
+.browser-app .context-compact > div {
+  position: absolute;
+  z-index: 30;
+  left: 10px;
+  right: 10px;
+  top: 100%;
+  padding: 10px 14px;
+  border: 1px solid #30433e;
+  border-radius: 0 0 12px 12px;
+  background: #142128;
+  box-shadow: 0 12px 24px #0005;
+  max-height: min(200px, 35vh);
+  overflow-y: auto;
+}
+.browser-app .context-compact p {
+  margin: 4px 0;
+  line-height: 1.5;
+}
+.browser-app .context-compact .usage-high {
+  color: #d9c491;
+}
+.browser-app .conversation-updating {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 20px;
+  padding: 0 4px 5px;
+  font-size: 11px;
+  color: #9cbab2;
+}
+.browser-app .choice-trigger {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 40px;
+  max-width: 180px;
+  padding: 5px;
+  color: #abc5c9;
+  background: transparent;
+  font-size: 12px;
+}
+.browser-app .choice-trigger span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.browser-app .choice-trigger svg {
+  flex-shrink: 0;
+}
+.browser-app .choice-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 12px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  background: #03080baa;
+}
+.browser-app .choice-dialog {
+  width: min(440px, 100%);
+  max-height: calc(100% - 16px);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #426056;
+  border-radius: 18px;
+  background: #142128;
+  box-shadow: 0 20px 80px #0008;
+}
+.browser-app .choice-dialog header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px 8px 18px;
+}
+.browser-app .choice-dialog header button {
+  min-height: 44px;
+  min-width: 44px;
+}
+.browser-app .choice-dialog [role="listbox"] {
+  padding: 0 8px 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.browser-app .choice-dialog [role="option"] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 12px;
+  text-align: left;
+  font-size: 16px;
+  border-radius: 10px;
+}
+.browser-app .choice-dialog [aria-selected="true"] {
+  background: #a8ddc51b;
+}
+.browser-app .composer textarea {
+  min-height: 40px;
+  max-height: min(128px, calc(var(--app-height, 100dvh) * 0.22));
+  padding: 8px 12px 4px;
+  line-height: 1.5;
+}
+@media (max-width: 760px), (pointer: coarse) and (max-width: 1024px) {
+  .browser-app .app-header {
+    height: 48px;
+  }
+  .browser-app .mobile-live {
+    min-height: 30px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+  .browser-app .chat-heading {
+    height: 46px;
+    min-height: 46px;
+    padding: 0 14px;
+  }
+  .browser-app .chat-heading .eyebrow {
+    display: none;
+  }
+  .browser-app .chat-management {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 3px 12px;
+    gap: 12px;
+    min-height: 34px;
+  }
+  .browser-app .chat-management button {
+    flex-shrink: 0;
+    min-height: 30px;
+  }
+  .browser-app .composer-area {
+    padding: 5px 10px 4px;
+  }
+  .browser-app .composer-bottom {
+    padding: 0 6px 5px;
+    gap: 4px;
+  }
+  .browser-app .composer-foot {
+    display: none;
+  }
+  .browser-app .model-controls {
+    max-width: none;
+  }
+  .browser-app .choice-trigger:first-child {
+    flex: 1;
+  }
+  .pwa-compact .browser-app .composer textarea {
+    min-height: 40px;
+    max-height: min(100px, calc(var(--app-height, 100dvh) * 0.18));
+    padding-top: 8px;
+  }
+  .pwa-keyboard .browser-app .pwa-bar {
+    display: none;
+  }
+}
