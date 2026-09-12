@@ -275,3 +275,81 @@ export async function layoutSmoke(
     `${engine}: keyboard focus/animation, scroll boundaries, long drafts, dialogs and repeated navigation passed`,
   );
 }
+
+export async function safeAreaSmoke(
+  page: Page,
+  engine: string,
+  captures?: string,
+) {
+  await page.addInitScript(() =>
+    Object.defineProperty(navigator, "standalone", {
+      configurable: true,
+      value: sessionStorage.getItem("test-standalone") === "true",
+    }),
+  );
+  await page.evaluate(() => sessionStorage.setItem("test-standalone", "true"));
+  await page.reload();
+  await page
+    .getByText("Welcome to First. Your workspace stays on this computer.")
+    .waitFor();
+  const insets = await page.addStyleTag({
+    content: `
+    .pwa-document { --pwa-safe-top: 59px; --pwa-safe-bottom: 34px; }
+    /* Model WebKit's inset-reduced dynamic viewport measurement. */
+    .pwa-viewport-measure { height: calc(100dvh - 93px); }
+  `,
+  });
+  await viewport(page, 751);
+  await page.getByLabel("Message your agent").blur();
+  await geometry(page, 844);
+  const bounds = await page.evaluate(() => {
+    const rect = (selector: string) =>
+      document.querySelector(selector)!.getBoundingClientRect();
+    return {
+      headerTop: rect(".app-header").top,
+      menuTop: rect(".mobile-menu").top,
+      composerBottom: rect(".composer-area").bottom,
+      sendBottom: rect('[title="Send message"]').bottom,
+    };
+  });
+  assert.equal(bounds.headerTop, 0, "Header surface reaches the screen edge");
+  assert.ok(bounds.menuTop >= 59, "Header controls clear the status area");
+  assert.equal(
+    bounds.composerBottom,
+    844,
+    "Composer surface reaches the bottom edge",
+  );
+  assert.ok(bounds.sendBottom <= 810, "Send clears the home indicator once");
+  if (captures)
+    await page.screenshot({
+      path: path.join(captures, `${engine}-safe-area.png`),
+    });
+  await page.getByLabel("Message your agent").focus();
+  await viewport(page, 430, 32);
+  await geometry(page, 430, 32);
+  assert.equal(
+    await page.evaluate(() =>
+      getComputedStyle(document.documentElement)
+        .getPropertyValue("--pwa-bottom-space")
+        .trim(),
+    ),
+    "0px",
+  );
+  await page.getByLabel("Message your agent").blur();
+  await viewport(page, null);
+  await geometry(page, 844);
+  // A system-owned strip is outside the web viewport. Never force screen.height.
+  await page.setViewportSize({ width: 393, height: 782 });
+  await geometry(page, 782);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await geometry(page, 844);
+  await insets.evaluate((element) => element.remove());
+  await page.evaluate(() => sessionStorage.removeItem("test-standalone"));
+  await page.reload();
+  await page
+    .getByText("Welcome to First. Your workspace stays on this computer.")
+    .waitFor();
+  console.log(
+    `${engine}: installed safe areas, inset-reduced viewport, keyboard and OS-owned viewport bounds passed`,
+  );
+}

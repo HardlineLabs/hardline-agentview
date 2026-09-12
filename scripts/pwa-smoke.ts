@@ -9,7 +9,11 @@ import { DatabaseSync } from "node:sqlite";
 import { randomInt, randomBytes } from "node:crypto";
 import { PairingRegistry, type Sql } from "../src/pairing/registry";
 import { HostService, encodeConnection } from "../src/host/service";
-import { installViewportFixture, layoutSmoke } from "./pwa-layout-smoke";
+import {
+  installViewportFixture,
+  layoutSmoke,
+  safeAreaSmoke,
+} from "./pwa-layout-smoke";
 
 // Real host TLS, pairing, encryption, storage and browser UI; only the agent
 // runtime is a deterministic fixture. Never uses the developer's vault/account.
@@ -632,6 +636,7 @@ try {
         "No horizontal overflow",
       );
       await layoutSmoke(page, engine.name(), captures);
+      await safeAreaSmoke(page, engine.name(), captures);
       const lastMessage = page.getByText(
         "Welcome to First. Your workspace stays on this computer.",
       );

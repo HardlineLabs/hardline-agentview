@@ -92,7 +92,11 @@ dialogs scroll within their own boundaries. Reaching the end of a conversation
 does not scroll the app into blank space; code blocks still allow sideways reading
 without trapping vertical chat scrolling.
 
-The CSS dynamic viewport fills the screen when no keyboard is open. While editing,
+An installed app measures a fixed viewport frame instead of `100dvh`; browser tabs
+continue using the dynamic viewport to respect Safari's toolbars. Header and composer
+surfaces extend into the safe areas, while their controls clear the notch and home
+indicator. Bottom spacing uses the larger of the normal margin and the safe inset,
+instead of adding both. While editing,
 the visual viewport resizes the shell and its dialogs above the keyboard. Focus
 transitions are followed briefly to handle delayed Safari geometry before the first
 keystroke, without preserving stale offsets after a picker or app switch. Model and
@@ -108,6 +112,16 @@ visible and shows a small **Updating** indicator above the composer while refres
 Up to five recently opened conversations stay in memory for the current session;
 transcripts are not written to browser storage. A cold reload or an app discarded by
 iOS still needs to retrieve its conversation from the Host.
+
+WebKit has [reported viewport-height errors](https://bugs.webkit.org/show_bug.cgi?id=254868)
+in installed apps that exclude safe areas from some height measurements. Applying
+safe-area padding inside an already reduced height leaves unnecessary space.
+The fixed frame avoids that measurement dependency. The PWA already requests
+`viewport-fit=cover` and a translucent status bar, following
+[Apple's safe-area guidance](https://webkit.org/blog/7929/designing-websites-for-iphone-x/).
+Some iOS versions also have a separate [system-owned status-strip bug](https://bugs.webkit.org/show_bug.cgi?id=301994).
+CSS cannot draw outside the viewport iOS grants the app; forcing `screen.height`
+would put controls offscreen. The system clock and home indicator are not hidden.
 
 ## Updates
 
@@ -154,7 +168,9 @@ recovery and revocation. Layout stress checks exercise empty-input focus before
 typing, delayed visual-viewport geometry, scrolling past both ends of long and
 empty chats, wide code blocks, growing/shrinking drafts, repeated model/effort choices,
 slow reconnects with messages retained, repeated drawer/settings/brain changes,
-search, small screens and rotation. Synthetic keyboard geometry changes separately
+search, small screens and rotation. Installed-mode checks include nonzero safe insets,
+inset-reduced height measurements and a web viewport smaller than the screen.
+Synthetic keyboard geometry changes separately
 from the layout viewport; it is a regression test, not a real iOS keyboard.
 Chromium uses wheel input to check scroll routing; mobile WebKit checks DOM scroll
 geometry because Playwright cannot inject wheel input in that mode.
