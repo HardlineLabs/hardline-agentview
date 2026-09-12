@@ -67,8 +67,11 @@ and model; sending the first message removes it.
 
 Use **Rename** in a conversation or **Select conversations** in the drawer to
 archive, restore or permanently delete several chats. Active chats are protected;
-partial failures retain the failed selection. Terminal and Agent workspace nodes
-now live in the brain's coordinates and move with the graph as you drag.
+partial failures retain the failed selection. Terminal and Agent workspace appear
+as compact nodes below the brain network, without note links. Drag either station
+independently to place it; its position lasts while the graph is open. They scale
+with the notes during zoom, and Fit includes both stations. Tap a busy station to
+open its active conversation.
 
 Attach images or files from the composer. Images are converted on the device to
 JPEG with a longest edge of 2,048 pixels; unsupported image decoding reports an
