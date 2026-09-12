@@ -6,7 +6,7 @@ There is no unauthenticated HTTP control API. See [remote access](remote-access.
 for the transport. All paired devices have workspace-level authority.
 
 Initial pairing has a separate, bounded directory API at
-`https://app.hardline-labs.com/api/pair`. Its JSON POST routes are `publish`
+`https://agentviewapp.hardline-labs.com/api/pair`. Its JSON POST routes are `publish`
 (`invitation`, random 256-bit hexadecimal `token`, `expiresAt`), `claim` (six-digit
 `code`, random UUID `claimId`), and `cancel` (`token`). Publish returns `code` and
 `expiresAt`; claim returns the temporary `invitation`. Requests are capped at

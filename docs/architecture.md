@@ -97,8 +97,12 @@ is rechecked on monitor changes. `requestAnimationFrame` follows display timing;
 agent speed and zoom interpolation use elapsed time. The layout simulation settles
 instead of continually nudging text. Connections extend and animate independently
 of travel. Terminal and Agent workspace stations give untargeted work a visible,
-clickable destination. In the PWA these stations occupy graph coordinates and
-move with panning and zoom. Gentle-motion settings pause decorative motion; actual
+clickable destination. In the PWA these stations sit below the note bounds without
+joining the force simulation or note links. They use a 13-unit radius, scale with
+the graph, and support independent dragging. User placement lasts for the mounted
+graph and survives graph snapshots; Fit includes the current station positions.
+Dragging does not open a chat; tapping a busy station does.
+Gentle-motion settings pause decorative motion; actual
 agent travel remains visible. Smoothness ultimately depends on monitor, GPU and
 OS compositor performance.
 

@@ -257,3 +257,65 @@ test("Worker routes only pairing POSTs, rejects cross-origin/large bodies, and s
     f.db.close();
   }
 });
+
+test("domain migration redirects web visits and shares pairing across old and new origins", async () => {
+  const f = fixture();
+  const directory = new PairingDirectory({
+    storage: { sql: f.sql, async setAlarm() {} },
+  });
+  const env = {
+    ASSETS: {
+      async fetch() {
+        return new Response("static");
+      },
+    },
+    PAIRING: { idFromName: () => "fixture", get: () => directory },
+  };
+  const oldOrigin = "https://app.hardline-labs.com";
+  const newOrigin = "https://agentviewapp.hardline-labs.com";
+  const send = (origin: string, action: string, body: unknown) =>
+    worker.fetch(
+      new Request(`${origin}/api/pair/${action}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "CF-Connecting-IP": "192.0.2.1",
+          Origin: origin,
+        },
+        body: JSON.stringify(body),
+      }),
+      env,
+    );
+  try {
+    const redirect = await worker.fetch(
+      new Request(`${oldOrigin}/?source=qr`),
+      env,
+    );
+    assert.equal(redirect.status, 307);
+    assert.equal(redirect.headers.get("Location"), `${newOrigin}/?source=qr`);
+    assert.equal(
+      await (await worker.fetch(new Request(newOrigin), env)).text(),
+      "static",
+    );
+    const published = await send(oldOrigin, "publish", {
+      invitation: f.invitation,
+      token: f.token,
+      expiresAt: f.now + 300_000,
+    });
+    assert.equal(published.status, 200);
+    assert.equal(published.headers.get("Location"), null);
+    const { code } = (await published.json()) as { code: string };
+    const claimed = await send(newOrigin, "claim", {
+      code,
+      claimId: randomUUID(),
+    });
+    assert.equal(claimed.status, 200);
+    assert.equal(claimed.headers.get("Cache-Control"), "no-store");
+    assert.equal(
+      (await send(oldOrigin, "cancel", { token: f.token })).status,
+      200,
+    );
+  } finally {
+    f.db.close();
+  }
+});

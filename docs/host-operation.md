@@ -10,9 +10,13 @@ does not establish that the network listener or tunnel is reachable. A malformed
 or unreadable settings file now reports a startup error instead of silently using
 LAN-only defaults; Windows UTF-8 BOM files are accepted.
 
+Host 0.4.2 updates pairing and QR links to `agentviewapp.hardline-labs.com`.
+See [the web address migration](pwa.md#address-migration) before replacing an
+installed phone PWA. Existing host settings and remote tunnel routes are retained.
+
 ## Opening the Host window
 
-Host 0.4.2-dev.5 preserves the saved connector settings when saving the Host form.
+Host 0.4.2 preserves the saved connector settings when saving the Host form.
 If connector paths are missing, it can recover this Host's existing managed
 `tunnel.yml` and installed cloudflared, after checking the endpoint, origin port
 and certificate path. It does not create tunnels or alter remote routes.
@@ -67,7 +71,7 @@ Build with `npm ci` and `npm run package`, then install the validated unpacked h
 
 ```powershell
 ./scripts/install-host.ps1 -PackageDirectory ./out/host/win-unpacked `
-  -InstallDirectory "$env:USERPROFILE/Desktop/AgentView" -Version 0.4.0 `
+  -InstallDirectory "$env:USERPROFILE/Desktop/AgentView" -Version 0.4.2 `
   -RegisterStartup
 ```
 

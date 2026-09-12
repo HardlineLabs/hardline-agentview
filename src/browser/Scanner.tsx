@@ -32,7 +32,10 @@ export function Scanner({
           inversionAttempts: "attemptBoth",
         });
         let value = result?.data || "";
-        if (value.startsWith("https://app.hardline-labs.com/")) {
+        if (
+          value.startsWith("https://agentviewapp.hardline-labs.com/") ||
+          value.startsWith("https://app.hardline-labs.com/")
+        ) {
           try {
             value =
               sixDigitCode(

@@ -12,7 +12,7 @@ port from the local subnet. Keep the host computer awake and signed in; closing
 its window leaves it in the tray.
 
 For iPhone, choose **Pair device**, name the phone, and enter the six-digit code
-at [app.hardline-labs.com](https://app.hardline-labs.com). Host checks remote
+at [agentviewapp.hardline-labs.com](https://agentviewapp.hardline-labs.com). Host checks remote
 reachability first. Codes expire in five minutes and work for one device.
 Windows clients use **Older clients and local pairing → Create full
 invitation**. The host can remove a paired device's access at any time. Each paired

@@ -25,8 +25,6 @@ export const colors: Record<string, string> = {
   aegis: "#be9bfa",
   website: "#80b9dc",
   "discord-bot": "#e4a1b9",
-  gamehealth: "#a9cc83",
-  faultlab: "#e99980",
   agentview: "#79e2d0",
   knowledge: "#adb8c6",
 };
@@ -38,8 +36,6 @@ export const domainLabel = (domain: string) =>
     aegis: "Aegis",
     website: "Website",
     "discord-bot": "Discord",
-    gamehealth: "GameHealth",
-    faultlab: "FaultLab",
     agentview: "AgentView",
     knowledge: "Knowledge",
   })[domain] || domain;

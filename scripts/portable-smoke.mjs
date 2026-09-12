@@ -57,20 +57,23 @@ async function launch(role, port) {
 
 try {
   const host = await launch("host", 9437);
-  await host.waitForFunction(
-    async () => {
-      const status = await window.agentview.invoke("host.status");
-      return status.agentReady && status.running && status.notes > 0;
-    },
-    null,
-    { timeout: 45_000 },
+  let status;
+  for (let attempt = 0; attempt < 90; attempt++) {
+    status = await host.evaluate(() => window.agentview.invoke("host.status"));
+    if (status.agentReady && status.running && status.notes > 0) break;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  assert.ok(
+    status?.agentReady && status.running && status.notes > 0,
+    "Portable Host starts its listener, runtime and vault",
   );
-  const status = await host.evaluate(() =>
-    window.agentview.invoke("host.status"),
+  const invitation = await host.evaluate(() =>
+    window.agentview.invoke("host.invite", { name: "Portable smoke client" }),
   );
-  assert.equal(status.running, true);
   const client = await launch("client", 9438);
-  await client.getByLabel("Connection key").fill(status.pairingCode);
+  await client.evaluate(() => window.agentview.invoke("connection.disconnect"));
+  await client.reload();
+  await client.getByLabel("Connection key").fill(invitation.code);
   await client
     .locator("summary")
     .filter({ hasText: "Use a different" })
