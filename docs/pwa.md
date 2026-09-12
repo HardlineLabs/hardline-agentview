@@ -1,7 +1,7 @@
 # AgentView on iPhone and the web
 
 The PWA shares AgentView's React interface, graph and encrypted workspace protocol
-with the Android and Windows clients. Its static deployment delivers application
+with the Windows client. Its static deployment delivers application
 files. Each phone pairs with its own Windows host; that host retains its vault,
 repositories, agent sign-in and execution. There is no shared hosted agent account.
 
@@ -41,7 +41,7 @@ can revoke one phone without affecting other devices. Every paired device has fu
 access to that host's workspace.
 
 Saved pairing is encrypted in IndexedDB with a non-exportable Web Crypto key.
-This is browser-origin protection, not Android Keystore or an iOS Keychain promise:
+This is browser-origin protection, not an OS keychain promise:
 code running on the app's origin can use that key. Use a trusted device. Clearing
 website data removes pairing; create a fresh invitation afterward. **Disconnect &
 change host** clears this browser's saved pairing, drafts, attachment previews and
