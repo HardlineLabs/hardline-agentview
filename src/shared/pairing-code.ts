@@ -1,6 +1,6 @@
 import { decodeConnection } from "./pairing";
 
-export const PAIRING_SERVICE = "https://app.hardline-labs.com/api/pair";
+export const PAIRING_SERVICE = "https://agentviewapp.hardline-labs.com/api/pair";
 export function sixDigitCode(value: string) {
   const normalized = value.trim().replace(/[\s-]/g, "");
   return /^\d{6}$/.test(normalized) ? normalized : undefined;

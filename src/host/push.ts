@@ -77,7 +77,7 @@ export class HostPush {
         try {
           await webpush.sendNotification(subscription, JSON.stringify(notice), {
             vapidDetails: {
-              subject: "https://app.hardline-labs.com",
+              subject: "https://agentviewapp.hardline-labs.com",
               ...this.keys!,
             },
             TTL: 3600,

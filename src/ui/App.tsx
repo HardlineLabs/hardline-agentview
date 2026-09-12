@@ -149,7 +149,7 @@ function HostApp() {
         qr: await QRCode.toDataURL(
           legacy
             ? result.code
-            : `https://app.hardline-labs.com/#pair=${result.code}`,
+            : `https://agentviewapp.hardline-labs.com/#pair=${result.code}`,
           {
             scale: 6,
             margin: 4,
@@ -349,7 +349,7 @@ function HostApp() {
           </div>
           <p>
             Each paired device has full access to this workspace. Give each
-            phone its own six-digit code. Enter it at app.hardline-labs.com from
+            phone its own six-digit code. Enter it at agentviewapp.hardline-labs.com from
             anywhere. Host checks the remote connection before showing a code.
           </p>
           <div className="input-row">

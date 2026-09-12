@@ -44,8 +44,14 @@ export class PairingDirectory {
 export default {
   async fetch(request: Request, env: Env) {
     const url = new URL(request.url);
-    if (!url.pathname.startsWith("/api/pair/"))
+    if (!url.pathname.startsWith("/api/pair/")) {
+      // Keep old Host pairing POSTs in place; they deliberately reject redirects.
+      if (url.hostname === "app.hardline-labs.com") {
+        url.hostname = "agentviewapp.hardline-labs.com";
+        return Response.redirect(url.href, 307);
+      }
       return env.ASSETS.fetch(request);
+    }
     if (request.method !== "POST")
       return new Response("Method not allowed", { status: 405 });
     const origin = request.headers.get("Origin");
