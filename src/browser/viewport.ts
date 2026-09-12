@@ -1,6 +1,7 @@
 export function trackViewport() {
   const viewport = window.visualViewport;
   const root = document.documentElement;
+  const displayMode = matchMedia("(display-mode: standalone)");
   root.classList.add("pwa-document");
   const measure = document.createElement("div");
   measure.className = "pwa-viewport-measure";
@@ -13,9 +14,15 @@ export function trackViewport() {
     "textarea, input:not([type=checkbox]):not([type=radio]), [contenteditable=true]";
   const update = () => {
     frame = 0;
+    root.classList.toggle(
+      "pwa-standalone",
+      displayMode.matches ||
+        Boolean((navigator as Navigator & { standalone?: boolean }).standalone),
+    );
     // Ignore pinch zoom; use the visible viewport only for keyboard/layout changes.
     if (!viewport || Math.abs(viewport.scale - 1) <= 0.05) {
-      // CSS dynamic viewport is authoritative when the keyboard is closed.
+      // Installed apps measure the fixed viewport, not an inset-reduced dvh.
+      // Browser tabs retain dvh so their address/tool bars are respected.
       // iOS can retain stale visualViewport height/offset after a native picker
       // or app switch; feeding those values back into a fixed shell leaves gaps.
       const fullHeight = measure.getBoundingClientRect().height || innerHeight;
@@ -47,6 +54,7 @@ export function trackViewport() {
     schedule();
   };
   viewport?.addEventListener("resize", schedule);
+  displayMode.addEventListener("change", settle);
   viewport?.addEventListener("scroll", schedule);
   window.addEventListener("resize", settle);
   window.addEventListener("pageshow", settle);

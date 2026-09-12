@@ -4,6 +4,16 @@
   height: 100%;
   overflow: hidden;
   overscroll-behavior: none;
+  background-color: #0c141a;
+}
+.pwa-document {
+  --pwa-safe-top: env(safe-area-inset-top, 0px);
+  --pwa-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --pwa-top-space: max(0px, calc(var(--pwa-safe-top) - var(--app-top, 0px)));
+  --pwa-bottom-space: var(--pwa-safe-bottom);
+}
+.pwa-document.pwa-keyboard {
+  --pwa-bottom-space: 0px;
 }
 .pwa-document body {
   position: fixed;
@@ -23,12 +33,9 @@
   min-width: 0;
   position: relative;
   overflow: hidden;
-  padding-top: max(
-    0px,
-    calc(env(safe-area-inset-top, 0px) - var(--app-top, 0px))
-  );
+  padding-top: var(--pwa-top-space);
   padding-right: env(safe-area-inset-right, 0px);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-bottom: var(--pwa-bottom-space);
   padding-left: env(safe-area-inset-left, 0px);
 }
 .pwa-keyboard .browser-app {
@@ -637,6 +644,12 @@
   visibility: hidden;
   pointer-events: none;
 }
+.pwa-standalone .pwa-viewport-measure {
+  /* A fixed element reaches the installed viewport even when dvh omits insets.
+     Do not use screen.height: OS-owned bars may be outside the web viewport. */
+  bottom: 0;
+  height: auto;
+}
 .browser-app .context-compact {
   flex: 0 0 auto;
   position: relative;
@@ -779,6 +792,21 @@
   .browser-app .app-header {
     height: 48px;
   }
+  .browser-app > .pwa-bar {
+    margin-top: calc(-1 * var(--pwa-top-space));
+    padding-top: calc(8px + var(--pwa-top-space));
+  }
+  .browser-app:not(:has(> .pwa-bar)):not(:has(> .pwa-error)) > .app-header {
+    /* Paint the header into the notch area; keep its controls below it. */
+    margin-top: calc(-1 * var(--pwa-top-space));
+    padding-top: var(--pwa-top-space);
+    height: calc(48px + var(--pwa-top-space));
+  }
+  .pwa-compact
+    .browser-app:not(:has(> .pwa-bar)):not(:has(> .pwa-error))
+    > .app-header {
+    height: calc(44px + var(--pwa-top-space));
+  }
   .browser-app .mobile-live {
     min-height: 30px;
     padding-top: 4px;
@@ -804,7 +832,11 @@
     min-height: 30px;
   }
   .browser-app .composer-area {
-    padding: 5px 10px 4px;
+    /* Extend the surface, not the buttons, into the home-indicator area. */
+    padding: 5px 10px max(4px, var(--pwa-bottom-space));
+  }
+  .browser-app.phone-chat:has(.chat-panel) {
+    padding-bottom: 0;
   }
   .browser-app .composer-bottom {
     padding: 0 6px 5px;
