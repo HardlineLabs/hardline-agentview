@@ -131,6 +131,12 @@ Up to five recently opened conversations stay in memory for the current session;
 transcripts are not written to browser storage. A cold reload or an app discarded by
 iOS still needs to retrieve its conversation from the Host.
 
+If a new conversation's saved history is still being written, the accepted turn
+stays visible with **Loading saved history** until it can be read. Sending does
+not reset the selected model or effort. Steering messages appear immediately in a
+muted pending style, then become ordinary messages when the runtime reports the
+input. **Waiting for agent** indicates queued input, not a read receipt.
+
 WebKit has [reported viewport-height errors](https://bugs.webkit.org/show_bug.cgi?id=254868)
 in installed apps that exclude safe areas from some height measurements. Applying
 safe-area padding inside an already reduced height leaves unnecessary space.

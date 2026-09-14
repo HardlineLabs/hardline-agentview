@@ -21,6 +21,11 @@ import {
 } from "lucide-react";
 import { ChoicePicker } from "../browser/ChoicePicker";
 import { ContextUsage } from "./Usage";
+import { ElicitationFields } from "./ElicitationFields";
+import {
+  elicitationContent,
+  type ElicitationSchema,
+} from "../shared/elicitation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { invoke, browser } from "./api";
@@ -144,6 +149,19 @@ function ApprovalCard({
 }) {
   const [busy, setBusy] = useState(false);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const elicitation = approval.method === "mcpServer/elicitation/request";
+  const schema: ElicitationSchema | undefined =
+    elicitation && approval.params.mode === "form"
+      ? approval.params.requestedSchema
+      : undefined;
+  const [content, setContent] = useState<Record<string, unknown>>(() =>
+    Object.fromEntries(
+      Object.entries(schema?.properties || {})
+        .filter(([, field]) => field.default !== undefined)
+        .map(([name, field]) => [name, field.default]),
+    ),
+  );
+  const form = useRef<HTMLFormElement>(null);
   const questions = approval.params.questions as
     | {
         id: string;
@@ -152,11 +170,15 @@ function ApprovalCard({
       }[]
     | undefined;
   const respond = async (allow: boolean) => {
+    if (allow && !form.current?.reportValidity()) return;
     setBusy(true);
     try {
       await invoke("approval.respond", {
         id: approval.id,
         allow,
+        ...(allow && schema
+          ? { content: elicitationContent(schema, content) }
+          : {}),
         answers: Object.fromEntries(
           Object.entries(answers).map(([id, answer]) => [
             id,
@@ -171,7 +193,14 @@ function ApprovalCard({
     }
   };
   return (
-    <div className="approval-card">
+    <form
+      ref={form}
+      className="approval-card"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void respond(true);
+      }}
+    >
       <div className="eyebrow">
         <AlertCircle size={13} /> Your attention
       </div>
@@ -183,6 +212,7 @@ function ApprovalCard({
               <div className="answer-options">
                 {q.options.map((o) => (
                   <button
+                    type="button"
                     className={answers[q.id] === o.label ? "selected" : ""}
                     key={o.label}
                     onClick={() =>
@@ -206,10 +236,27 @@ function ApprovalCard({
       ) : (
         <p>
           {approval.params.reason ||
+            approval.params.message ||
             approval.params.command ||
             "The agent needs permission to continue."}
         </p>
       )}
+      {schema && (
+        <ElicitationFields
+          schema={schema}
+          values={content}
+          onChange={(name, value) =>
+            setContent((c) => ({ ...c, [name]: value }))
+          }
+        />
+      )}
+      {elicitation &&
+        approval.params.mode === "url" &&
+        /^https?:\/\//i.test(approval.params.url) && (
+          <a href={approval.params.url} target="_blank" rel="noreferrer">
+            Open permission request
+          </a>
+        )}
       {!questions &&
         (approval.params.command ||
           approval.params.permissions ||
@@ -228,21 +275,25 @@ function ApprovalCard({
         )}
       <div className="approval-actions">
         {!questions && (
-          <button disabled={busy} onClick={() => void respond(false)}>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void respond(false)}
+          >
             Decline
           </button>
         )}
         <button
+          type="submit"
           className="primary"
           disabled={
             busy || Boolean(questions?.some((q) => !answers[q.id]?.trim()))
           }
-          onClick={() => void respond(true)}
         >
           {busy ? "Sending…" : questions ? "Send answer" : "Allow"}
         </button>
       </div>
-    </div>
+    </form>
   );
 }
 type Props = {
@@ -259,7 +310,7 @@ type Props = {
   attachment?: Note;
   onDetach: () => void;
   onNew: () => void;
-  onSent: (id: string, turn: Turn) => void;
+  onSent: (thread: Thread, turn: Turn) => void;
   onLoadMore: () => void;
   onError: (message: string) => void;
   onHide: () => void;
@@ -284,8 +335,17 @@ export function Chat(props: Props) {
   const [clearing, setClearing] = useState(false);
   const [confirmClear, setConfirmClear] = useState<"archive" | "delete">();
   const [sentNotice, setSentNotice] = useState("");
+  const [steering, setSteering] = useState<
+    {
+      id: string;
+      threadId: string;
+      text: string;
+      state: "sending" | "waiting" | "uncertain";
+    }[]
+  >([]);
   const [model, setModel] = useState("");
   const [effort, setEffort] = useState("high");
+  const choices = useRef(new Map<string, { model: string; effort: string }>());
   const [projectId, setProjectId] = useState("vault");
   const scroll = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
@@ -296,13 +356,27 @@ export function Chat(props: Props) {
   );
   const currentModel = props.models.find((m) => m.id === model);
   useEffect(() => {
+    const received = new Set(
+      props.page?.turns.flatMap((t) => t.items.map((i) => i.id)),
+    );
+    setSteering((messages) =>
+      messages.some((m) => received.has(m.id))
+        ? messages.filter((m) => !received.has(m.id))
+        : messages,
+    );
+  }, [props.page]);
+  useEffect(() => {
+    const saved = choices.current.get(props.thread?.id || "new");
     setModel(
-      props.thread?.model ||
+      saved?.model ||
+        props.thread?.model ||
         props.models.find((m) => m.isDefault)?.id ||
         props.models[0]?.id ||
         "",
     );
-    setEffort(props.thread?.reasoningEffort || "high");
+    setEffort(saved?.effort || props.thread?.reasoningEffort || "high");
+  }, [props.thread?.id, props.thread?.model, props.thread?.reasoningEffort]);
+  useEffect(() => {
     setText(drafts.current.get(props.thread?.id || "new") || "");
     setAttachments(
       browser ? browserAttachments.get(props.thread?.id || "new") || [] : [],
@@ -315,6 +389,21 @@ export function Chat(props: Props) {
     setSentNotice("");
     follow.current = true;
   }, [props.thread?.id]);
+  const chooseEffort = (value: string) => {
+    choices.current.set(props.thread?.id || "new", { model, effort: value });
+    setEffort(value);
+  };
+  const chooseModel = (value: string) => {
+    const nextEffort =
+      props.models.find((m) => m.id === value)?.defaultReasoningEffort ||
+      "high";
+    choices.current.set(props.thread?.id || "new", {
+      model: value,
+      effort: nextEffort,
+    });
+    setModel(value);
+    setEffort(nextEffort);
+  };
   useEffect(() => {
     if (!model && props.models.length)
       setModel(props.models.find((m) => m.isDefault)?.id || props.models[0].id);
@@ -322,7 +411,7 @@ export function Chat(props: Props) {
   useEffect(() => {
     if (follow.current && scroll.current)
       scroll.current.scrollTop = scroll.current.scrollHeight;
-  }, [props.page, sending]);
+  }, [props.page, sending, steering]);
   useEffect(() => {
     if (!browser || !scroll.current) return;
     const panel = scroll.current;
@@ -358,10 +447,28 @@ export function Chat(props: Props) {
       return;
     setSending(true);
     const draftId = props.thread?.id || "new";
+    const messageId = crypto.randomUUID();
+    const isSteering = active && !queueMode;
+    if (isSteering) {
+      follow.current = true;
+      setSteering((messages) => [
+        ...messages,
+        {
+          id: messageId,
+          threadId: draftId,
+          text: [outgoingText, ...attachments.map((a) => `[${a.name}]`)].join(
+            "\n",
+          ),
+          state: "sending",
+        },
+      ]);
+    }
     try {
+      let created: Thread | undefined;
       let id = props.thread?.id;
       if (!id) {
         const thread = await invoke("thread.create", { projectId, model });
+        created = thread;
         id = thread.id;
       }
       const result = await invoke(
@@ -372,6 +479,7 @@ export function Chat(props: Props) {
             : "thread.send",
         {
           id,
+          clientUserMessageId: messageId,
           expectedTurnId: props.page?.turns
             .filter((t) => t.status === "inProgress")
             .at(-1)?.id,
@@ -384,6 +492,12 @@ export function Chat(props: Props) {
           noteId: props.attachment?.id,
         },
       );
+      if (isSteering)
+        setSteering((messages) =>
+          messages.map((m) =>
+            m.id === messageId ? { ...m, state: "waiting" } : m,
+          ),
+        );
       drafts.current.delete(draftId);
       browserAttachments.delete(draftId);
       persist();
@@ -392,11 +506,31 @@ export function Chat(props: Props) {
       setText("");
       props.onDetach();
       if (active && queueMode) setSentNotice("Follow-up queued on the host.");
-      else if (result.steered)
-        setSentNotice("Steering message accepted by the active agent.");
-      else props.onSent(result.threadId, result.turn);
+      else if (!result.steered) {
+        choices.current.set(result.threadId, { model, effort });
+        props.onSent(
+          {
+            ...(result.thread || created || props.thread),
+            id: result.threadId,
+            model,
+            reasoningEffort: effort,
+            owned: true,
+          },
+          result.turn,
+        );
+      }
       follow.current = true;
     } catch (e: any) {
+      if (isSteering)
+        setSteering((messages) =>
+          /disconnect|did not answer|unavailable|stopped|uncertain/i.test(
+            e.message,
+          )
+            ? messages.map((m) =>
+                m.id === messageId ? { ...m, state: "uncertain" } : m,
+              )
+            : messages.filter((m) => m.id !== messageId),
+        );
       props.onError(e.message);
     } finally {
       setSending(false);
@@ -734,13 +868,37 @@ export function Chat(props: Props) {
                 )}
               </div>
             ))}
-            {!props.page?.turns.length && (
+            {!props.page?.turns.length && !props.page?.historyPending && (
               <p className="muted empty-history">
                 The conversation is ready for your first message.
               </p>
             )}
           </>
         )}
+        {steering
+          .filter(
+            (m) =>
+              m.threadId === props.thread?.id &&
+              !props.page?.turns.some((t) =>
+                t.items.some((i) => i.id === m.id),
+              ),
+          )
+          .map((message) => (
+            <div
+              key={message.id}
+              className="user-message steering-pending"
+              role="status"
+            >
+              <div>{message.text}</div>
+              <small>
+                {message.state === "sending"
+                  ? "Sending…"
+                  : message.state === "waiting"
+                    ? "Waiting for agent"
+                    : "Delivery unconfirmed — check before resending"}
+              </small>
+            </div>
+          ))}
         {(active || sending) && (
           <div className="working-indicator">
             <i />
@@ -758,6 +916,11 @@ export function Chat(props: Props) {
           ))}
       </div>
       <div className="composer-area">
+        {props.page?.historyPending && (
+          <div className="conversation-updating" role="status">
+            <LoaderCircle className="spin" size={12} /> Loading saved history…
+          </div>
+        )}
         {browser && props.page && (props.loading || !props.connected) && (
           <div className="conversation-updating" role="status">
             <LoaderCircle className="spin" size={12} />
@@ -889,23 +1052,17 @@ export function Chat(props: Props) {
                   <ChoicePicker
                     label="Model"
                     value={model}
-                    disabled={active}
+                    disabled={active || sending}
                     options={props.models.map((m) => ({
                       value: m.id,
                       label: m.displayName,
                     }))}
-                    onChange={(value) => {
-                      setModel(value);
-                      setEffort(
-                        props.models.find((m) => m.id === value)
-                          ?.defaultReasoningEffort || "high",
-                      );
-                    }}
+                    onChange={chooseModel}
                   />
                   <ChoicePicker
                     label="Reasoning effort"
                     value={effort}
-                    disabled={active}
+                    disabled={active || sending}
                     options={(
                       currentModel?.supportedReasoningEfforts || [
                         { reasoningEffort: "high" },
@@ -914,22 +1071,16 @@ export function Chat(props: Props) {
                       value: e.reasoningEffort,
                       label: e.reasoningEffort,
                     }))}
-                    onChange={setEffort}
+                    onChange={chooseEffort}
                   />
                 </>
               ) : (
                 <>
                   <select
                     aria-label="Model"
-                    disabled={active}
+                    disabled={active || sending}
                     value={model}
-                    onChange={(e) => {
-                      setModel(e.target.value);
-                      setEffort(
-                        props.models.find((m) => m.id === e.target.value)
-                          ?.defaultReasoningEffort || "high",
-                      );
-                    }}
+                    onChange={(e) => chooseModel(e.target.value)}
                   >
                     {props.models.map((m) => (
                       <option key={m.id} value={m.id}>
@@ -939,9 +1090,9 @@ export function Chat(props: Props) {
                   </select>
                   <select
                     aria-label="Reasoning effort"
-                    disabled={active}
+                    disabled={active || sending}
                     value={effort}
-                    onChange={(e) => setEffort(e.target.value)}
+                    onChange={(e) => chooseEffort(e.target.value)}
                   >
                     {(
                       currentModel?.supportedReasoningEfforts || [

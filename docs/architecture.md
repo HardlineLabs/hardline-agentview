@@ -77,6 +77,24 @@ unarchive and deletion use the runtime lifecycle APIs, including their descendan
 semantics. The host rejects clearing observed active work; deletion requires the
 client's explicit confirmation. Mutation request IDs are deduplicated.
 
+Steering appears immediately as a muted pending message. Runtime acknowledgement
+changes its status to Waiting for agent; the runtime's user-message event replaces
+it with the normal chat message using the same client message ID. This does not
+claim that the model has understood the direction. Failed steering retains the
+draft; uncertain delivery stays visibly unconfirmed and is never resent automatically.
+
+Newly accepted turns remain visible while the runtime's rollout metadata is still
+being written. Host uses its live conversation cache only for this transient
+condition, marks saved history as pending, and clients refresh the read until it
+is available. Other history errors remain visible. Composer choices survive chat
+creation and refresh; late thread metadata cannot overwrite a user's local choice.
+
+Command/file approvals and MCP elicitations have separate response contracts.
+MCP Allow sends accept with the requested typed form values; Decline sends decline
+with no content. URL elicitations link to their permission flow. Unknown extended
+forms require the host agent interface; AgentView never treats an unsupported form
+as an approval or silently converts Allow into cancellation.
+
 `thread/tokenUsage/updated` supplies the context gauge and cumulative totals.
 The bounded rollout observer recovers `token_count` records for existing active
 and archived chats, including old timestamps, without interpreting message text.

@@ -297,7 +297,7 @@ export function browserBridge(): DesktopBridge {
             "queue.add",
           ].includes(method)
         ) {
-          const requestId = crypto.randomUUID();
+          const requestId = params.clientUserMessageId || crypto.randomUUID();
           const outgoing = {
             method,
             threadId: params.id,

@@ -98,6 +98,7 @@ export type ChatPage = {
   thread: Thread;
   turns: Turn[];
   nextCursor: string | null;
+  historyPending?: boolean;
 };
 export type Project = {
   id: string;

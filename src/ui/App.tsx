@@ -349,8 +349,9 @@ function HostApp() {
           </div>
           <p>
             Each paired device has full access to this workspace. Give each
-            phone its own six-digit code. Enter it at agentviewapp.hardline-labs.com from
-            anywhere. Host checks the remote connection before showing a code.
+            phone its own six-digit code. Enter it at
+            agentviewapp.hardline-labs.com from anywhere. Host checks the remote
+            connection before showing a code.
           </p>
           <div className="input-row">
             <input
@@ -796,7 +797,9 @@ function ClientApp() {
     if (!more) {
       if (browser) threadRef.current = id;
       setSelectedThread(id);
-      setPage(browser ? recentPages.current.get(id) : undefined);
+      setPage((old) =>
+        old?.thread.id === id ? old : recentPages.current.get(id),
+      );
       setLoading(true);
     }
     if (!browser || !refresh) {
@@ -833,6 +836,14 @@ function ClientApp() {
       if (generation === readGeneration.current) setLoading(false);
     }
   };
+  useEffect(() => {
+    if (!page?.historyPending || connection !== "connected" || loading) return;
+    const timer = setTimeout(
+      () => void readThread(page.thread.id, false, true),
+      1000,
+    );
+    return () => clearTimeout(timer);
+  }, [page?.thread.id, page?.historyPending, connection, loading]);
   useEffect(() => {
     const onEvent = (event: AppEvent) => {
       if (event.type === "connection") {
@@ -1601,17 +1612,20 @@ function ClientApp() {
                 attachment={attachment}
                 onDetach={() => setAttachment(undefined)}
                 onNew={newChat}
-                onSent={(id, turn) => {
+                onSent={(thread, turn) => {
+                  const id = thread.id;
+                  threadRef.current = id;
                   setSelectedThread(id);
                   setPage((p) =>
                     p?.thread.id === id
                       ? {
                           ...p,
+                          thread,
                           turns: p.turns.some((t) => t.id === turn.id)
                             ? p.turns
                             : [...p.turns, turn],
                         }
-                      : p,
+                      : { thread, turns: [turn], nextCursor: null },
                   );
                   void readThread(id);
                 }}

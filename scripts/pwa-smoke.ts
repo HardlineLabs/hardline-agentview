@@ -6,6 +6,7 @@ import path from "node:path";
 import { chromium, webkit, devices, type Page } from "playwright";
 import QRCode from "qrcode";
 import { graphStationSmoke } from "./pwa-graph-smoke";
+import { chatRecoverySmoke } from "./pwa-chat-smoke";
 import { DatabaseSync } from "node:sqlite";
 import { randomInt, randomBytes } from "node:crypto";
 import { PairingRegistry, type Sql } from "../src/pairing/registry";
@@ -378,6 +379,48 @@ async function expandedWorkspace(page: Page, engine: string) {
       await page.locator(".approval-card").waitFor({ state: "detached" });
       assert.deepEqual(decisions[index], { decision });
     }
+    for (const allow of [false, true]) {
+      first.codex.emit("request", {
+        id: `${engine}-mcp-${allow}`,
+        method: "mcpServer/elicitation/request",
+        params: {
+          threadId: approvalThread.id,
+          mode: "form",
+          message: "Allow browser access for this task?",
+          requestedSchema: {
+            type: "object",
+            required: ["scope"],
+            properties: {
+              scope: {
+                type: "string",
+                title: "Access scope",
+                oneOf: [
+                  { const: "once", title: "This action" },
+                  { const: "session", title: "This chat" },
+                ],
+              },
+            },
+          },
+        },
+      });
+      const card = page.locator(".approval-card");
+      await card
+        .getByText("Allow browser access for this task?", { exact: true })
+        .waitFor();
+      if (allow) {
+        await page.reload();
+        await card.getByLabel("Access scope").selectOption("once");
+      }
+      await card
+        .getByRole("button", { name: allow ? "Allow" : "Decline", exact: true })
+        .click();
+      await card.waitFor({ state: "detached" });
+      assert.deepEqual(decisions.at(-1), {
+        action: allow ? "accept" : "decline",
+        content: allow ? { scope: "once" } : null,
+        _meta: null,
+      });
+    }
   } finally {
     first.codex.respond = originalRespond;
   }
@@ -743,6 +786,7 @@ try {
       });
       assert.equal(rawStorage.sealed, true);
       assert.ok(!rawStorage.plain.includes("secret"));
+      await chatRecoverySmoke(page, first);
       await expandedWorkspace(page, engine.name());
       if (engine === chromium) {
         await page.evaluate(() => navigator.serviceWorker.ready);

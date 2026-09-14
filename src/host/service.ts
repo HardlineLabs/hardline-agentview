@@ -45,6 +45,7 @@ import { HostFeatures } from "./features";
 import { threadPolicy, turnPolicy } from "./permissions";
 import { saveState } from "./state";
 import { version } from "../../package.json";
+import { elicitationContent } from "../shared/elicitation";
 
 export function visibleItems(items: ChatItem[]) {
   return items.filter((i) => !["reasoning", "hookPrompt"].includes(i.type));
@@ -889,6 +890,7 @@ export class HostService extends EventEmitter {
       let thread = this.liveThreads.get(p.id);
       let history: Turn[] = [];
       let nextCursor = null;
+      let historyPending = false;
       try {
         ({ thread } = await this.codex.rpc("thread/read", { threadId: p.id }));
         const page = await this.codex.rpc("thread/turns/list", {
@@ -903,12 +905,24 @@ export class HostService extends EventEmitter {
       } catch (e) {
         if (p.cursor) throw e;
         // Older runtimes expose legacy history through thread/read instead.
-        const stored = await this.codex.rpc("thread/read", {
-          threadId: p.id,
-          includeTurns: true,
-        });
-        thread = stored.thread;
-        history = stored.thread.turns || [];
+        try {
+          const stored = await this.codex.rpc("thread/read", {
+            threadId: p.id,
+            includeTurns: true,
+          });
+          thread = stored.thread;
+          history = stored.thread.turns || [];
+        } catch (error: any) {
+          // A new rollout can exist before its first metadata write. Keep the
+          // accepted turn visible until storage catches up; other errors surface.
+          if (
+            !thread ||
+            !this.loaded.has(p.id) ||
+            !/rollout.*is empty|not yet materialized/i.test(error.message)
+          )
+            throw error;
+          historyPending = true;
+        }
       }
       const turns = new Map(
         history.map((t) => [t.id, { ...t, items: visibleItems(t.items) }]),
@@ -916,10 +930,13 @@ export class HostService extends EventEmitter {
       if (!p.cursor)
         for (const turn of this.liveTurns.get(p.id) || [])
           turns.set(turn.id, turn);
+      const listed = this.threads.find((t) => t.id === p.id);
       return {
         thread: {
           ...thread!,
-          ...this.threads.find((t) => t.id === p.id),
+          ...listed,
+          model: thread?.model ?? listed?.model,
+          reasoningEffort: thread?.reasoningEffort ?? listed?.reasoningEffort,
           owned: this.owned.has(p.id),
           usage: this.usage.get(p.id),
         },
@@ -938,6 +955,7 @@ export class HostService extends EventEmitter {
             : turn,
         ),
         nextCursor,
+        historyPending,
       };
     }
     if (method === "thread.create") {
@@ -1032,6 +1050,9 @@ export class HostService extends EventEmitter {
         await this.codex.rpc("turn/steer", {
           threadId: id,
           expectedTurnId: turnId,
+          ...(p.clientUserMessageId
+            ? { clientUserMessageId: p.clientUserMessageId }
+            : {}),
           input: [{ type: "text", text }, ...input],
         });
         return { threadId: id, steered: true };
@@ -1078,9 +1099,25 @@ export class HostService extends EventEmitter {
         result.turn.status === "inProgress"
       )
         this.activeTurns.set(id, result.turn.id);
+      this.liveTurns.set(
+        id,
+        applyConversationEvent(this.liveTurns.get(id) || [], "turn/started", {
+          turn: result.turn,
+        }),
+      );
+      const thread = {
+        ...this.threads.find((t) => t.id === id),
+        ...this.liveThreads.get(id),
+        ...(p.model ? { model: p.model } : {}),
+        ...(p.effort ? { reasoningEffort: p.effort } : {}),
+        id,
+        owned: true,
+      } as Thread;
+      this.liveThreads.set(id, thread);
       await this.refreshThreads();
       return {
         threadId: id,
+        thread,
         turn: { ...result.turn, items: visibleItems(result.turn.items || []) },
       };
     }
@@ -1107,9 +1144,24 @@ export class HostService extends EventEmitter {
           permissions: p.allow ? approval.params.permissions : {},
           scope: "turn",
         };
-      else if (approval.method === "mcpServer/elicitation/request")
-        result = { action: "cancel", content: null, _meta: null };
-      else
+      else if (approval.method === "mcpServer/elicitation/request") {
+        const form = approval.params.mode === "form";
+        if (p.allow && !form && approval.params.mode !== "url")
+          throw new Error(
+            "This permission form requires the host agent interface.",
+          );
+        result = {
+          action: p.allow ? "accept" : "decline",
+          content:
+            p.allow && form
+              ? elicitationContent(
+                  approval.params.requestedSchema,
+                  p.content || {},
+                )
+              : null,
+          _meta: null,
+        };
+      } else
         throw new Error(
           "This approval type requires the host agent interface.",
         );
