@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUp,
   Square,
@@ -355,16 +355,23 @@ export function Chat(props: Props) {
     props.page?.turns.some((t) => t.status === "inProgress"),
   );
   const currentModel = props.models.find((m) => m.id === model);
+  const received = useMemo(() => {
+    const ids = new Set<string>();
+    for (const turn of props.page?.turns || [])
+      for (const item of turn.items) {
+        if (item.type !== "userMessage") continue;
+        ids.add(item.id);
+        if (item.clientId) ids.add(item.clientId);
+      }
+    return ids;
+  }, [props.page?.turns]);
   useEffect(() => {
-    const received = new Set(
-      props.page?.turns.flatMap((t) => t.items.map((i) => i.id)),
-    );
     setSteering((messages) =>
       messages.some((m) => received.has(m.id))
         ? messages.filter((m) => !received.has(m.id))
         : messages,
     );
-  }, [props.page]);
+  }, [received]);
   useEffect(() => {
     const saved = choices.current.get(props.thread?.id || "new");
     setModel(
@@ -876,13 +883,7 @@ export function Chat(props: Props) {
           </>
         )}
         {steering
-          .filter(
-            (m) =>
-              m.threadId === props.thread?.id &&
-              !props.page?.turns.some((t) =>
-                t.items.some((i) => i.id === m.id),
-              ),
-          )
+          .filter((m) => m.threadId === props.thread?.id && !received.has(m.id))
           .map((message) => (
             <div
               key={message.id}

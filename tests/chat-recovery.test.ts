@@ -191,6 +191,89 @@ test("history fallback never hides unrelated failures or claims unknown history 
   );
 });
 
+test("reopening paginated history never appends cached onboarding after newer turns", async () => {
+  const { host, state, thread } = fixture();
+  const history = Array.from({ length: 20 }, (_, index) => ({
+    id: `turn-${index}`,
+    status: "completed",
+    items: [
+      {
+        id: `message-${index}`,
+        type: "userMessage",
+        content: [
+          { type: "text", text: index ? `Message ${index}` : "Onboard" },
+        ],
+      },
+    ],
+  }));
+  state.liveTurns.set(thread.id, history);
+  host.codex.rpc = async (method, params) => {
+    if (method === "thread/read") return { thread };
+    assert.equal(method, "thread/turns/list");
+    assert.equal(params.sortDirection, "desc");
+    assert.equal(params.limit, 15);
+    return {
+      data: (params.cursor ? history.slice(0, 5) : history.slice(5)).reverse(),
+      nextCursor: params.cursor ? null : "older",
+    };
+  };
+  for (let reopen = 0; reopen < 2; reopen++) {
+    const latest = await host.handle("thread.read", { id: thread.id });
+    assert.deepEqual(latest.turns, history.slice(5));
+    assert.equal(latest.nextCursor, "older");
+    const older = await host.handle("thread.read", {
+      id: thread.id,
+      cursor: latest.nextCursor,
+    });
+    assert.deepEqual([...older.turns, ...latest.turns], history);
+    assert.equal(older.nextCursor, null);
+  }
+});
+
+test("history overlap keeps fresh cached updates and only appends newer unpersisted turns", async () => {
+  const { host, state, thread } = fixture();
+  const saved = Array.from({ length: 18 }, (_, index) => ({
+    id: `saved-${index}`,
+    status: index === 17 ? "inProgress" : "completed",
+    items: [
+      { id: `reply-${index}`, type: "agentMessage", text: "Saved response" },
+    ],
+  }));
+  const updated = {
+    ...saved[17],
+    status: "completed",
+    items: [{ ...saved[17].items[0], text: "Finished response" }],
+  };
+  const pending = [
+    { id: "not-yet-saved", status: "completed", items: [] },
+    { id: "current-work", status: "inProgress", items: [] },
+  ];
+  state.liveTurns.set(thread.id, [...saved.slice(0, 17), updated, ...pending]);
+  host.codex.rpc = async (method) =>
+    method === "thread/read"
+      ? { thread }
+      : { data: saved.slice(-15).reverse(), nextCursor: "older" };
+  const latest = await host.handle("thread.read", { id: thread.id });
+  assert.deepEqual(latest.turns, [...saved.slice(3, 17), updated, ...pending]);
+  saved[17] = updated;
+  saved.push(...pending);
+  const persisted = await host.handle("thread.read", { id: thread.id });
+  assert.deepEqual(persisted.turns, saved.slice(-15));
+});
+
+test("legacy full history keeps its original order when live turns overlap", async () => {
+  const { host, state, thread, turn } = fixture();
+  const older = { id: "onboarding", status: "completed", items: [] };
+  state.liveTurns.set(thread.id, [older, turn]);
+  host.codex.rpc = async (method) => {
+    if (method === "thread/turns/list") throw new Error("Method not found");
+    return { thread: { ...thread, turns: [older, turn] } };
+  };
+  const result = await host.handle("thread.read", { id: thread.id });
+  assert.deepEqual(result.turns, [older, turn]);
+  assert.equal(result.nextCursor, null);
+});
+
 test("steering retains the client message identity so the pending bubble reconciles with runtime input", async () => {
   const { host } = fixture();
   let params: any;

@@ -61,6 +61,10 @@ and the requested form values, while Decline submits refusal. Earlier versions
 cancelled both choices for this prompt type. Install the updated Host as well as
 the PWA; the existing execution worker can remain running during this update.
 
+Host 0.4.3-dev.2 keeps older cached turns out of the newest history page. Install
+it together with the PWA correction for duplicate pending steering messages.
+This update also preserves the existing execution worker.
+
 Full access is separate from Windows administrator rights. Run **Check host
 capabilities** to see the actual Host and runtime elevation, Codex home, enabled
 features and exposed tools. Availability does not prove every app interaction

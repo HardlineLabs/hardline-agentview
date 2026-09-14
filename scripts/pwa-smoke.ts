@@ -6,7 +6,7 @@ import path from "node:path";
 import { chromium, webkit, devices, type Page } from "playwright";
 import QRCode from "qrcode";
 import { graphStationSmoke } from "./pwa-graph-smoke";
-import { chatRecoverySmoke } from "./pwa-chat-smoke";
+import { chatRecoverySmoke, historyOrderSmoke } from "./pwa-chat-smoke";
 import { DatabaseSync } from "node:sqlite";
 import { randomInt, randomBytes } from "node:crypto";
 import { PairingRegistry, type Sql } from "../src/pairing/registry";
@@ -787,6 +787,7 @@ try {
       assert.equal(rawStorage.sealed, true);
       assert.ok(!rawStorage.plain.includes("secret"));
       await chatRecoverySmoke(page, first);
+      await historyOrderSmoke(page, first);
       await expandedWorkspace(page, engine.name());
       if (engine === chromium) {
         await page.evaluate(() => navigator.serviceWorker.ready);
