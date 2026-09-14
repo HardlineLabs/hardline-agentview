@@ -79,6 +79,7 @@ export type AccountLimits = {
 };
 export type ChatItem = {
   id: string;
+  clientId?: string | null;
   type: string;
   text?: string;
   content?: { type: string; text?: string }[];

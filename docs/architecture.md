@@ -79,9 +79,15 @@ client's explicit confirmation. Mutation request IDs are deduplicated.
 
 Steering appears immediately as a muted pending message. Runtime acknowledgement
 changes its status to Waiting for agent; the runtime's user-message event replaces
-it with the normal chat message using the same client message ID. This does not
-claim that the model has understood the direction. Failed steering retains the
-draft; uncertain delivery stays visibly unconfirmed and is never resent automatically.
+it with the normal chat message using its `clientId` correlation (or matching item
+ID on older runtimes). This does not claim that the model has understood the
+direction. Failed steering retains the draft; uncertain delivery stays visibly
+unconfirmed and is never resent automatically.
+
+Reopened conversations preserve the saved page's chronological order. The Host's
+live cache can contain turns older than that page; these stay behind Earlier
+messages instead of being appended as new work. Shared turns receive live updates,
+and only the cache tail after the last shared turn extends the newest page.
 
 Newly accepted turns remain visible while the runtime's rollout metadata is still
 being written. Host uses its live conversation cache only for this transient

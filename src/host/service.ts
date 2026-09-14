@@ -927,9 +927,17 @@ export class HostService extends EventEmitter {
       const turns = new Map(
         history.map((t) => [t.id, { ...t, items: visibleItems(t.items) }]),
       );
-      if (!p.cursor)
-        for (const turn of this.liveTurns.get(p.id) || [])
-          turns.set(turn.id, turn);
+      if (!p.cursor) {
+        const live = this.liveTurns.get(p.id) || [];
+        // The live cache can reach further back than this saved page. Only its
+        // tail after the last shared turn is newer history awaiting persistence.
+        let lastShared = -1;
+        for (const [index, turn] of live.entries())
+          if (turns.has(turn.id)) lastShared = index;
+        for (const [index, turn] of live.entries())
+          if (turns.has(turn.id) || index > lastShared)
+            turns.set(turn.id, turn);
+      }
       const listed = this.threads.find((t) => t.id === p.id);
       return {
         thread: {
