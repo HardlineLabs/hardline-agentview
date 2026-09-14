@@ -56,6 +56,11 @@ Changing the default does not alter a turn already running. Workspace and Read
 only modes remain available. Organization requirements and individual connected
 apps can impose their own restrictions.
 
+Host 0.4.3-dev.1 also corrects MCP permission prompts: Allow submits acceptance
+and the requested form values, while Decline submits refusal. Earlier versions
+cancelled both choices for this prompt type. Install the updated Host as well as
+the PWA; the existing execution worker can remain running during this update.
+
 Full access is separate from Windows administrator rights. Run **Check host
 capabilities** to see the actual Host and runtime elevation, Codex home, enabled
 features and exposed tools. Availability does not prove every app interaction

@@ -1418,6 +1418,14 @@ meter::-webkit-meter-optimum-value {
   background: #b3a27b09;
   margin: 15px 0;
 }
+.user-message.steering-pending {
+  opacity: 0.7;
+  border: 1px dashed currentColor;
+}
+.steering-pending small {
+  display: block;
+  margin-top: 6px;
+}
 .approval-card .eyebrow {
   color: #c8b088;
   margin-bottom: 12px;
