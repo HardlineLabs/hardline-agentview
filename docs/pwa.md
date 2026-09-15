@@ -127,9 +127,19 @@ Pinch zoom remains available.
 
 During brief app switches or reconnects, the browser keeps the last known messages
 visible and shows a small **Updating** indicator above the composer while refreshing.
-Up to five recently opened conversations stay in memory for the current session;
-transcripts are not written to browser storage. A cold reload or an app discarded by
-iOS still needs to retrieve its conversation from the Host.
+Up to five recently opened conversations share a 4 MiB estimated content budget
+in memory for the current session. Larger conversations remain readable while open
+but are not retained in that recent-chat cache. Transcripts are not written to browser
+storage. A cold reload or an app discarded by iOS still retrieves history from Host.
+
+Long conversations render a moving window of individual messages and tool calls,
+including when most of the work happened in one turn. Scroll upward and use
+**Earlier messages** to read older history. Tool output enters the page when its
+details are expanded; expansion is remembered while the chat remains open.
+Typing does not rerender unchanged messages, and streamed updates are grouped by
+animation frame. These browser optimizations do not change Host history or the
+Windows client. Browser Find and text selection only cover currently mounted
+messages in a long chat; use Copy on a visible message to copy its full text.
 
 If a new conversation's saved history is still being written, the accepted turn
 stays visible with **Loading saved history** until it can be read. Sending does
@@ -204,6 +214,12 @@ geometry because Playwright cannot inject wheel input in that mode.
 Chromium additionally exercises camera-frame QR decoding,
 offline shell and update/draft recovery. These do not establish physical iPhone
 camera, keyboard, installation or cellular behavior; verify those on an iPhone.
+
+The long-conversation regression uses 1,200 items in one turn and checks mounted
+message counts, input-to-frame timing against an empty chat, expanded tools, history pagination and
+scrolling during streamed output in both browsers. Run it alone with
+`AGENTVIEW_PWA_PERFORMANCE_ONLY=1` and `npm run pwa:smoke`; it also runs in the full
+suite. Measurements describe the test computer, not physical iPhone performance.
 
 For a public-path check, install `cloudflared`, set `AGENTVIEW_PWA_URL` to the
 published HTTPS client and run `npm run pwa:remote-smoke`. This starts a temporary

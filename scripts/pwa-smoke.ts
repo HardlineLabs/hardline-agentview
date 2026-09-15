@@ -7,6 +7,7 @@ import { chromium, webkit, devices, type Page } from "playwright";
 import QRCode from "qrcode";
 import { graphStationSmoke } from "./pwa-graph-smoke";
 import { chatRecoverySmoke, historyOrderSmoke } from "./pwa-chat-smoke";
+import { longConversationSmoke } from "./pwa-performance-smoke";
 import { DatabaseSync } from "node:sqlite";
 import { randomInt, randomBytes } from "node:crypto";
 import { PairingRegistry, type Sql } from "../src/pairing/registry";
@@ -634,6 +635,12 @@ try {
         largeNote.body.length > 600_000,
         "Large encrypted responses match native client limits",
       );
+      if (process.env.AGENTVIEW_PWA_PERFORMANCE_ONLY === "1") {
+        await longConversationSmoke(page, first);
+        assert.deepEqual(errors, []);
+        console.log(`${engine.name()}: long-conversation regression passed`);
+        continue;
+      }
       await page.getByLabel("Message your agent").fill("A draft worth keeping");
       await page.locator(".mobile-live").click();
       await page
@@ -788,6 +795,7 @@ try {
       assert.ok(!rawStorage.plain.includes("secret"));
       await chatRecoverySmoke(page, first);
       await historyOrderSmoke(page, first);
+      await longConversationSmoke(page, first);
       await expandedWorkspace(page, engine.name());
       if (engine === chromium) {
         await page.evaluate(() => navigator.serviceWorker.ready);

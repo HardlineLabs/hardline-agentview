@@ -2,6 +2,7 @@ import { PwaControls } from "../browser/PwaControls";
 import { Scanner } from "../browser/Scanner";
 import { WorkspaceTools, BulkChats } from "../browser/WorkspaceTools";
 import { saveDrafts } from "../browser/bridge";
+import { RecentConversations } from "../browser/conversations";
 import { useEffect, useRef, useState } from "react";
 import {
   Activity as ActivityIcon,
@@ -781,13 +782,10 @@ function ClientApp() {
     if (browser) void saveDrafts(selectedThread).catch(() => {});
   }, [selectedThread]);
   threadRef.current = selectedThread;
-  const recentPages = useRef(new Map<string, ChatPage>());
+  const recentPages = useRef(new RecentConversations());
   useEffect(() => {
     if (!browser || !page) return;
-    recentPages.current.delete(page.thread.id);
     recentPages.current.set(page.thread.id, page);
-    if (recentPages.current.size > 5)
-      recentPages.current.delete(recentPages.current.keys().next().value!);
   }, [page]);
   const readGeneration = useRef(0);
   const noteGeneration = useRef(0);
@@ -845,6 +843,29 @@ function ClientApp() {
     return () => clearTimeout(timer);
   }, [page?.thread.id, page?.historyPending, connection, loading]);
   useEffect(() => {
+    let frame = 0;
+    let events: AppEvent[] = [];
+    const flush = () => {
+      cancelAnimationFrame(frame);
+      frame = 0;
+      const pending = events;
+      events = [];
+      setPage((old) => {
+        if (!old) return old;
+        const relevant = pending.filter(
+          (event) => event.params.threadId === old.thread.id,
+        );
+        if (!relevant.length) return old;
+        return {
+          ...old,
+          turns: relevant.reduce(
+            (turns, event) =>
+              applyConversationEvent(turns, event.method, event.params),
+            old.turns,
+          ),
+        };
+      });
+    };
     const onEvent = (event: AppEvent) => {
       if (event.type === "connection") {
         setConnection(event.state);
@@ -946,11 +967,18 @@ function ClientApp() {
           );
           return;
         }
-        setPage((old) =>
-          old
-            ? { ...old, turns: applyConversationEvent(old.turns, method, p) }
-            : old,
-        );
+        if (browser) {
+          events.push(event);
+          if (!frame) frame = requestAnimationFrame(flush);
+          // A hidden browser may pause animation frames before disconnecting.
+          if (method === "turn/completed" || events.length >= 256) flush();
+        } else {
+          setPage((old) =>
+            old
+              ? { ...old, turns: applyConversationEvent(old.turns, method, p) }
+              : old,
+          );
+        }
         if (method === "turn/completed")
           void invoke("thread.read", { id: p.threadId })
             .then((result) => {
@@ -973,7 +1001,10 @@ function ClientApp() {
         }
       })
       .catch((e) => setConnectionError(e.message));
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+      cancelAnimationFrame(frame);
+    };
   }, []);
   useEffect(() => {
     if (!toast) return;

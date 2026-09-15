@@ -1,4 +1,13 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { BrowserTranscript, BrowserToolState } from "../browser/Transcript";
 import {
   ArrowUp,
   Square,
@@ -71,7 +80,9 @@ export function Markdown({ text }: { text: string }) {
     </ReactMarkdown>
   );
 }
-function Item({ item }: { item: ChatItem }) {
+function Item({ item, lazy = false }: { item: ChatItem; lazy?: boolean }) {
+  const expanded = useContext(BrowserToolState);
+  const [open, setOpen] = useState(() => Boolean(expanded?.has(item.id)));
   if (item.type === "userMessage") {
     const text =
       item.content
@@ -116,7 +127,20 @@ function Item({ item }: { item: ChatItem }) {
       ? item.changes?.map((c) => c.path.split(/[\\/]/).pop()).join(", ")
       : String(item.tool || item.query || item.type));
   return (
-    <details className="tool-item">
+    <details
+      className="tool-item"
+      open={lazy ? open : undefined}
+      onToggle={
+        lazy
+          ? (event) => {
+              const next = event.currentTarget.open;
+              if (next) expanded?.add(item.id);
+              else expanded?.delete(item.id);
+              setOpen(next);
+            }
+          : undefined
+      }
+    >
       <summary>
         {item.type === "fileChange" ? (
           <FileText size={13} />
@@ -132,14 +156,18 @@ function Item({ item }: { item: ChatItem }) {
           <Check size={12} />
         )}
       </summary>
-      <pre>
-        {item.command || text}
-        {item.aggregatedOutput ? "\n\n" + item.aggregatedOutput : ""}
-        {item.changes?.map((c) => "\n" + (c.diff || c.path)).join("")}
-      </pre>
+      {(!lazy || open) && (
+        <pre>
+          {item.command || text}
+          {item.aggregatedOutput ? "\n\n" + item.aggregatedOutput : ""}
+          {item.changes?.map((c) => "\n" + (c.diff || c.path)).join("")}
+        </pre>
+      )}
     </details>
   );
 }
+const BrowserItem = memo(Item);
+const emptyTurns: Turn[] = [];
 function ApprovalCard({
   approval,
   onError,
@@ -804,10 +832,25 @@ export function Chat(props: Props) {
       <div
         className="chat-scroll"
         ref={scroll}
-        onScroll={() => {
-          const e = scroll.current!;
-          follow.current = e.scrollHeight - e.scrollTop - e.clientHeight < 90;
-        }}
+        onScrollCapture={
+          browser
+            ? () => {
+                // Record bottom-follow intent before virtual rows measure new heights.
+                const e = scroll.current!;
+                follow.current =
+                  e.scrollHeight - e.scrollTop - e.clientHeight < 90;
+              }
+            : undefined
+        }
+        onScroll={
+          browser
+            ? undefined
+            : () => {
+                const e = scroll.current!;
+                follow.current =
+                  e.scrollHeight - e.scrollTop - e.clientHeight < 90;
+              }
+        }
       >
         {props.loading && (!browser || !props.page) ? (
           <div className="chat-loading">
@@ -865,16 +908,26 @@ export function Chat(props: Props) {
                 <ArrowLeft size={12} /> Earlier messages
               </button>
             )}
-            {props.page?.turns.map((turn) => (
-              <div className="turn" key={turn.id}>
-                {turn.items.map((item) => (
-                  <Item item={item} key={item.id} />
-                ))}
-                {turn.error && (
-                  <div className="inline-error">{turn.error.message}</div>
-                )}
-              </div>
-            ))}
+            {browser ? (
+              <BrowserTranscript
+                key={props.thread.id}
+                turns={props.page?.turns || emptyTurns}
+                scroll={scroll}
+                follow={follow}
+                Item={BrowserItem}
+              />
+            ) : (
+              props.page?.turns.map((turn) => (
+                <div className="turn" key={turn.id}>
+                  {turn.items.map((item) => (
+                    <Item item={item} key={item.id} />
+                  ))}
+                  {turn.error && (
+                    <div className="inline-error">{turn.error.message}</div>
+                  )}
+                </div>
+              ))
+            )}
             {!props.page?.turns.length && !props.page?.historyPending && (
               <p className="muted empty-history">
                 The conversation is ready for your first message.
