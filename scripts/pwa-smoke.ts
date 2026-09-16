@@ -706,6 +706,12 @@ try {
         "Welcome to First. Your workspace stays on this computer.",
       );
       readDelay = 1500;
+      // Finish the reload's service-worker check before deliberately cutting
+      // the network. WebKit reports an interrupted worker script as a page error.
+      await page.evaluate(async () => {
+        const registration = await navigator.serviceWorker.ready;
+        await registration.update();
+      });
       await context.setOffline(true);
       await page.locator(".connection-pill.lost").waitFor();
       assert.equal(
