@@ -4,6 +4,7 @@ import { useLayoutEffect, useRef, type RefObject } from "react";
 // Measure its remaining space instead of guessing a fraction of the screen.
 export function useBrowserComposer(
   input: RefObject<HTMLTextAreaElement | null>,
+  follow: RefObject<boolean>,
   enabled: boolean,
   text: string,
   chatId?: string,
@@ -28,12 +29,15 @@ export function useBrowserComposer(
       element.style.height = "auto";
       element.style.height = `${Math.min(element.scrollHeight, Math.max(36, available))}px`;
       element.scrollTop = previousScroll;
+      // Growing the draft shrinks the transcript in the same layout pass. Keep
+      // its tail anchored before the resulting scroll event updates follow.
+      if (follow.current) scroll.scrollTop = scroll.scrollHeight;
     };
     resize();
     const observer = new ResizeObserver(resize);
     for (const child of panel.children) observer.observe(child);
     return () => observer.disconnect();
-  }, [enabled, input, text, chatId]);
+  }, [enabled, input, follow, text, chatId]);
 
   useLayoutEffect(
     () => () => {

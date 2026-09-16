@@ -458,6 +458,7 @@ export function Chat(props: Props) {
   }, []);
   const animateSend = useBrowserComposer(
     input,
+    follow,
     browser,
     text,
     props.thread?.id,
