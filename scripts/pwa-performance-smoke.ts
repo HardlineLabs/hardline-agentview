@@ -195,12 +195,37 @@ export async function longConversationSmoke(page: Page, host: HostService) {
     await page
       .getByRole("button", { name: "Earlier messages" })
       .waitFor({ state: "detached" });
-    await page.waitForFunction((y) => {
-      const anchor = document.querySelector(
-        '[data-message-key="long-turn/long-0"] .user-message > div',
-      );
-      return anchor && Math.abs(anchor.getBoundingClientRect().top - y) < 10;
-    }, before!.y);
+    await page
+      .waitForFunction((y) => {
+        const anchor = document.querySelector(
+          '[data-message-key="long-turn/long-0"] .user-message > div',
+        );
+        return anchor && Math.abs(anchor.getBoundingClientRect().top - y) < 10;
+      }, before!.y)
+      .catch(async (error) => {
+        console.error("History anchor", {
+          before,
+          actual: await page.evaluate(() => {
+            const panel = document.querySelector(".chat-scroll")!;
+            const list = document.querySelector(".browser-transcript")!;
+            const row = document.querySelector(
+              '[data-message-key="long-turn/long-0"]',
+            )!;
+            return {
+              scrollTop: panel.scrollTop,
+              panelTop: panel.getBoundingClientRect().top,
+              listTop: list.getBoundingClientRect().top,
+              rowTop: row.getBoundingClientRect().top,
+              textTop: row
+                .querySelector(".user-message > div")!
+                .getBoundingClientRect().top,
+            };
+          }),
+        });
+        throw error;
+      });
+    // Late ResizeObserver/iOS scroll compensation must preserve it too.
+    await page.waitForTimeout(500);
     const after = await page
       .getByText("Long request 0", { exact: true })
       .boundingBox();

@@ -38,10 +38,15 @@ export async function graphStationSmoke(page: Page) {
         >,
     );
   try {
+    // A settled graph draws on demand; explicitly invalidate after installing
+    // the observer rather than relying on a permanent animation loop.
+    await page.getByRole("button", { name: "Fit graph", exact: true }).click();
     await page.waitForFunction(() => (window as any).graphMarks?.Terminal);
     await page.waitForTimeout(1200);
     const initial = await marks();
-    const box = await page.locator(".graph-surface canvas").boundingBox();
+    const box = await page
+      .locator(".graph-surface canvas:not(.graph-scene)")
+      .boundingBox();
     assert.ok(box);
     for (const title of ["Terminal", "Agent workspace"]) {
       assert.ok(initial[title].x > 0 && initial[title].x < box.width);
@@ -106,9 +111,64 @@ export async function graphStationSmoke(page: Page) {
       "Station icon size shrinks with zoom",
     );
     assert.equal(afterZoom.Terminal.scale, afterZoom["Agent workspace"].scale);
+    await page
+      .getByRole("button", { name: "Back to conversation", exact: true })
+      .click();
+    await page.locator(".mobile-live").click();
+    await page.waitForTimeout(500);
+    assert.ok(
+      Math.abs((await marks()).Terminal.scale - afterZoom.Terminal.scale) <
+        0.01,
+      "Returning from chat preserves the graph zoom",
+    );
     await page.getByRole("button", { name: "Fit graph", exact: true }).click();
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(2000);
+    const scene = page.locator(".graph-scene");
+    // Software WebKit may still be settling the force layout after the zoom.
+    // Compare filters only once the underlying scene is stable.
+    await page.waitForFunction(
+      () => {
+        const image = document
+          .querySelector<HTMLCanvasElement>(".graph-scene")!
+          .toDataURL();
+        if ((window as any).lastSceneImage !== image) {
+          (window as any).lastSceneImage = image;
+          (window as any).lastSceneChange = performance.now();
+        }
+        return performance.now() - (window as any).lastSceneChange > 500;
+      },
+      null,
+      { polling: 200, timeout: 45_000 },
+    );
+    const beforeFilter = await scene.evaluate((c: HTMLCanvasElement) =>
+      c.toDataURL(),
+    );
+    await page.locator(".graph-domains button").nth(1).click();
+    await page.waitForFunction(
+      (before) =>
+        document
+          .querySelector<HTMLCanvasElement>(".graph-scene")!
+          .toDataURL() !== before,
+      beforeFilter,
+    );
+    await page.getByRole("button", { name: "All notes", exact: true }).click();
+    await page.waitForFunction(
+      (before) =>
+        document
+          .querySelector<HTMLCanvasElement>(".graph-scene")!
+          .toDataURL() === before,
+      beforeFilter,
+    );
+    const home = (await marks())["First workspace"];
+    assert.ok(home, "Home note has a visible label");
+    await page.mouse.click(box.x + home.x, box.y + home.y - 17 * home.scale);
+    await page.locator(".note-inspector").waitFor();
+    await page.getByTitle("Close note", { exact: true }).click();
   } finally {
-    await page.evaluate(() => (window as any).restoreGraphDrawing());
+    await page.evaluate(() => {
+      (window as any).restoreGraphDrawing();
+      delete (window as any).lastSceneImage;
+      delete (window as any).lastSceneChange;
+    });
   }
 }

@@ -161,6 +161,8 @@ Typing does not rerender unchanged messages, and streamed updates are grouped by
 animation frame. These browser optimizations do not change Host history or the
 Windows client. Browser Find and text selection only cover currently mounted
 messages in a long chat; use Copy on a visible message to copy its full text.
+Loading the oldest page removes the history control in the same layout update as
+the new rows, preserving the reading position through delayed height measurements.
 
 If a new conversation's saved history is still being written, the accepted turn
 stays visible with **Loading saved history** until it can be read. Sending does
@@ -178,6 +180,36 @@ This workaround still requires physical iPhone validation. The PWA already reque
 Some iOS versions also have a separate [system-owned status-strip bug](https://bugs.webkit.org/show_bug.cgi?id=301994).
 CSS cannot draw outside the viewport iOS grants the app; forcing `screen.height`
 would put controls offscreen. The system clock and home indicator are not hidden.
+
+## Rendering and battery use
+
+The browser brain uses flat, subdued domain-colored nodes on a near-black surface.
+Agent travel, animated connections, file-change pulses, dragging and zoom remain
+live. A settled network is cached at the display's native pixel density while
+agents animate over it; labels and links are rebuilt only when their scene changes.
+Metadata-only graph refreshes retain the existing layout instead of reheating it.
+The canvas and force simulation stop when the phone shows chat or the app is in
+the background. A visible, idle brain stops drawing after layout and pulses settle.
+Input, graph updates, foreground return, resize, font loading and display-density
+changes wake it again. Returning to the same-sized view preserves pan and zoom.
+
+Camera QR decoding loads only when the scanner opens. The install cache includes
+that optional module for offline use, but excludes duplicate legacy WOFF fonts;
+supported browsers use the same fonts in WOFF2. Connection suspension, encrypted
+draft storage, update checks and notification behavior are unchanged.
+
+The energy regression uses 160 notes, 620 links and three synthetic agents through
+the encrypted Host. It compares idle brain, active brain, phone chat and background
+states, checks layout retention and wake-up, and records three 3-second samples per
+state. Run with `AGENTVIEW_PWA_ENERGY_ONLY=1` and `npm run pwa:smoke`; it also runs
+in the full suite. `AGENTVIEW_PWA_CAPTURES` saves screenshots and measurement JSON.
+`AGENTVIEW_ENERGY_BASELINE=1` permits the old continuous-rendering behavior when
+measuring an earlier client build; set `AGENTVIEW_PWA_BUILD` to that checkout's
+`dist/client` directory. Baselines allow 60 seconds for slow software-rendered
+layouts to settle; current clients must become idle within 45 seconds.
+Canvas work and Chromium main-thread time are
+performance/battery-cost proxies on the test workstation, not measured phone
+battery life. Physical iPhone validation remains separate.
 
 ## Updates
 

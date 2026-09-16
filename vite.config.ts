@@ -7,8 +7,22 @@ export default defineConfig(({ mode }) => ({
       ? [
           {
             name: "agentview-pwa-html",
+            enforce: "pre" as const,
+            transform(code: string, id: string) {
+              // Supported PWA browsers use WOFF2. Do not precache the duplicate
+              // legacy WOFF fallback supplied by the font package.
+              if (id.includes("/@fontsource/") && id.endsWith(".css"))
+                return code.replace(
+                  /,\s*url\([^)]*\.woff\)\s*format\('woff'\)/g,
+                  "",
+                );
+            },
             transformIndexHtml(html: string) {
               return html
+                .replace(
+                  'name="theme-color" content="#0b1014"',
+                  'name="theme-color" content="#05090d"',
+                )
                 .replace("img-src 'self' data:", "img-src 'self' data: blob:")
                 .replace("connect-src 'self'", "connect-src 'self' wss:")
                 .replace(

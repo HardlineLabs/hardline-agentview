@@ -130,6 +130,12 @@ Gentle-motion settings pause decorative motion; actual
 agent travel remains visible. Smoothness ultimately depends on monitor, GPU and
 OS compositor performance.
 
+The PWA renders subdued flat nodes and reuses the settled note network as a raster
+while live agents animate above it. Hidden and idle views stop drawing; metadata
+refreshes retain layout. The browser [rendering guide](pwa.md#rendering-and-battery-use)
+owns invalidation, resource loading and repeatable performance checks. The Windows
+client retains its original visual treatment and continuous animation.
+
 A read-only session observer follows only rollout paths returned by the local
 app-server, within its sessions directory. It reads bounded incremental JSONL
 chunks to surface existing desktop work and recover original tool targets hidden

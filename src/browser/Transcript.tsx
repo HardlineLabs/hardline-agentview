@@ -14,6 +14,7 @@ import type { ChatItem, Turn } from "../shared/types";
 
 type Props = {
   turns: Turn[];
+  hasEarlier: boolean;
   scroll: RefObject<HTMLDivElement | null>;
   follow: RefObject<boolean>;
   Item: ComponentType<{ item: ChatItem; lazy?: boolean }>;
@@ -50,7 +51,7 @@ export const BrowserTranscript = memo(function BrowserTranscript(props: Props) {
   );
 });
 
-function VirtualTranscript({ turns, scroll, follow, Item }: Props) {
+function VirtualTranscript({ turns, hasEarlier, scroll, follow, Item }: Props) {
   const rows = useMemo(
     () =>
       turns.flatMap((turn) => [
@@ -74,7 +75,10 @@ function VirtualTranscript({ turns, scroll, follow, Item }: Props) {
     [turns],
   );
   const list = useRef<HTMLDivElement>(null);
-  const [margin, setMargin] = useState(0);
+  const [insets, setInsets] = useState({ padding: 0, history: 0 });
+  // Change the history-control inset in the same render as prepended rows.
+  // A later scrollBy races the virtualizer's pending measurement/anchor work.
+  const margin = insets.padding + (hasEarlier ? insets.history : 0);
   const getItemKey = useCallback((index: number) => rows[index].key, [rows]);
   const virtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
     count: rows.length,
@@ -103,18 +107,28 @@ function VirtualTranscript({ turns, scroll, follow, Item }: Props) {
         element.getBoundingClientRect().top -
         panel.getBoundingClientRect().top +
         panel.scrollTop;
-      // The Earlier messages control disappears after the oldest page. Its
-      // height is outside the virtual list and must not shift the reading anchor.
-      if (Math.abs(next - margin) > 0.5) {
-        if (!follow.current) virtualizer.scrollBy(next - margin);
-        setMargin(next);
-      }
+      const control = panel.querySelector<HTMLElement>(".load-more");
+      const style = control && getComputedStyle(control);
+      const history =
+        control && style
+          ? control.getBoundingClientRect().height +
+            parseFloat(style.marginTop) +
+            parseFloat(style.marginBottom)
+          : insets.history;
+      const padding = next - (hasEarlier ? history : 0);
+      if (
+        Math.abs(padding - insets.padding) > 0.5 ||
+        Math.abs(history - insets.history) > 0.5
+      )
+        setInsets({ padding, history });
     };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(panel);
+    const control = panel.querySelector(".load-more");
+    if (control) observer.observe(control);
     return () => observer.disconnect();
-  }, [scroll, rows[0]?.key, margin, follow, virtualizer]);
+  }, [scroll, hasEarlier, insets]);
   useLayoutEffect(() => {
     if (follow.current) virtualizer.scrollToEnd();
   }, [virtualizer]);
