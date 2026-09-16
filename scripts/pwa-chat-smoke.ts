@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import path from "node:path";
 import type { Page } from "playwright";
 import type { HostService } from "../src/host/service";
 
@@ -101,7 +102,11 @@ export async function historyOrderSmoke(page: Page, host: HostService) {
 
 // Exercise the real UI and encrypted Host API while independently controlling
 // runtime acknowledgement, input delivery and persistence timing.
-export async function chatRecoverySmoke(page: Page, host: HostService) {
+export async function chatRecoverySmoke(
+  page: Page,
+  host: HostService,
+  captures?: string,
+) {
   await page.evaluate(() => {
     (window as any).composerFlights = [];
     const observer = new MutationObserver((records) => {
@@ -114,6 +119,7 @@ export async function chatRecoverySmoke(page: Page, host: HostService) {
             (window as any).composerFlights.push({
               text: node.textContent,
               hidden: node.getAttribute("aria-hidden"),
+              steering: node.classList.contains("composer-steering"),
               motion: (
                 node.getAnimations()[0]?.effect as KeyframeEffect
               )?.getKeyframes(),
@@ -210,6 +216,7 @@ export async function chatRecoverySmoke(page: Page, host: HostService) {
     );
     assert.equal(flights[0].text, "Keep this accepted message visible");
     assert.equal(flights[0].hidden, "true");
+    assert.equal(flights[0].steering, false);
     assert.equal(flights[0].replacement, 1, "The replacement bubble expands");
     assert.match(flights[0].motion.at(-1).transform, /-110px/);
     await page.locator(".composer-flight").waitFor({ state: "detached" });
@@ -233,6 +240,17 @@ export async function chatRecoverySmoke(page: Page, host: HostService) {
       "low",
     );
 
+    const draftBubble = page.locator(".composer-draft");
+    assert.match(
+      (await draftBubble.getAttribute("class")) || "",
+      /composer-steering/,
+    );
+    await page.getByLabel("Queue after current work").check();
+    assert.doesNotMatch(
+      (await draftBubble.getAttribute("class")) || "",
+      /composer-steering/,
+    );
+    await page.getByLabel("Queue after current work").uncheck();
     await page
       .getByLabel("Message your agent")
       .fill("Please include the alternate case");
@@ -243,6 +261,36 @@ export async function chatRecoverySmoke(page: Page, host: HostService) {
       await pending.innerText(),
       /Please include the alternate case/,
     );
+    const steeringAppearance = await page.evaluate(() => {
+      const appearance = (selector: string) => {
+        const style = getComputedStyle(document.querySelector(selector)!);
+        return [
+          style.backgroundColor,
+          style.backgroundImage,
+          style.borderTopStyle,
+          style.borderTopColor,
+          style.borderRadius,
+          style.color,
+          style.opacity,
+        ];
+      };
+      return {
+        draft: appearance(".composer-draft"),
+        pending: appearance(".user-message.steering-pending"),
+      };
+    });
+    assert.deepEqual(
+      steeringAppearance.draft,
+      steeringAppearance.pending,
+      "The steering draft already looks like the pending message",
+    );
+    if (captures)
+      await page.screenshot({
+        path: path.join(
+          captures,
+          `${page.context().browser()!.browserType().name()}-steering-draft.png`,
+        ),
+      });
     const deadline = Date.now() + 15_000;
     while (!acknowledge && Date.now() < deadline)
       await new Promise((resolve) => setTimeout(resolve, 10));
@@ -264,6 +312,15 @@ export async function chatRecoverySmoke(page: Page, host: HostService) {
     assert.equal(
       await page.evaluate(() => (window as any).composerFlights.length),
       2,
+    );
+    const steeringFlight = await page.evaluate(
+      () => (window as any).composerFlights[1],
+    );
+    assert.equal(steeringFlight.steering, true);
+    assert.equal(
+      steeringFlight.motion[0].opacity,
+      0.7,
+      "The flying steering bubble keeps its muted pending style",
     );
     const item = {
       id: crypto.randomUUID(),
@@ -415,6 +472,21 @@ export async function chatRecoverySmoke(page: Page, host: HostService) {
       params: { threadId: thread.id, turn },
     });
     await page.getByTitle("Send message", { exact: true }).waitFor();
+    assert.doesNotMatch(
+      (await draftBubble.getAttribute("class")) || "",
+      /composer-steering/,
+    );
+    assert.equal(
+      await draftBubble.evaluate(
+        (element) => getComputedStyle(element).borderTopStyle,
+      ),
+      "solid",
+    );
+    assert.equal(
+      await page.getByLabel("Message your agent").inputValue(),
+      "Retain rejected direction",
+      "Finishing the agent changes draft styling without losing the draft",
+    );
     await page.reload();
     await page
       .locator(".user-message")

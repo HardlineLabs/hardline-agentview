@@ -803,7 +803,7 @@ try {
       });
       assert.equal(rawStorage.sealed, true);
       assert.ok(!rawStorage.plain.includes("secret"));
-      await chatRecoverySmoke(page, first);
+      await chatRecoverySmoke(page, first, captures);
       await historyOrderSmoke(page, first);
       await longConversationSmoke(page, first);
       await expandedWorkspace(page, engine.name());

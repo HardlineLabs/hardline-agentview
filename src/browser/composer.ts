@@ -59,7 +59,7 @@ export function useBrowserComposer(
     [],
   );
 
-  return () => {
+  return (steering = false) => {
     if (
       !enabled ||
       !input.current ||
@@ -74,7 +74,7 @@ export function useBrowserComposer(
     flight.current?.remove();
     // A decorative copy never receives focus or becomes a second editable draft.
     const copy = document.createElement("div");
-    copy.className = "composer-flight";
+    copy.className = `composer-flight${steering ? " composer-steering" : ""}`;
     copy.setAttribute("aria-hidden", "true");
     copy.textContent = [
       input.current.value,
@@ -95,10 +95,12 @@ export function useBrowserComposer(
     });
     panel.append(copy);
     flight.current = copy;
+    const opacity = Number(getComputedStyle(copy).opacity);
+    const draftOpacity = Number(getComputedStyle(draft).opacity);
     const departure = copy.animate(
       [
-        { transform: "translateY(0) scale(1)", opacity: 1 },
-        { transform: "translateY(-40px) scale(.98)", opacity: 1, offset: 0.45 },
+        { transform: "translateY(0) scale(1)", opacity },
+        { transform: "translateY(-40px) scale(.98)", opacity, offset: 0.45 },
         { transform: "translateY(-110px) scale(.94)", opacity: 0 },
       ],
       { duration: 420, easing: "cubic-bezier(.2,.7,.2,1)" },
@@ -106,8 +108,8 @@ export function useBrowserComposer(
     departure.onfinish = () => copy.remove();
     const replacement = draft.animate(
       [
-        { transform: "scale(.96,.6)", opacity: 0.2 },
-        { transform: "scale(1)", opacity: 1 },
+        { transform: "scale(.96,.6)", opacity: draftOpacity * 0.2 },
+        { transform: "scale(1)", opacity: draftOpacity },
       ],
       { duration: 260, delay: 90, fill: "backwards", easing: "ease-out" },
     );

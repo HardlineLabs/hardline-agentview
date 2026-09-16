@@ -531,7 +531,7 @@ export function Chat(props: Props) {
       browserAttachments.delete(draftId);
       persist();
       if (currentChat.current !== draftId) return;
-      if (!onboardingText) animateSend();
+      if (!onboardingText) animateSend(isSteering);
       setAttachments([]);
       setText("");
       props.onDetach();
@@ -1071,7 +1071,9 @@ export function Chat(props: Props) {
           </div>
         )}
         <div className="composer">
-          <div className="composer-draft">
+          <div
+            className={`composer-draft${browser && active && !queueMode ? " composer-steering" : ""}`}
+          >
             {props.expanded && (
               <>
                 <input

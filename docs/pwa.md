@@ -28,6 +28,9 @@ screen rotation. When Host accepts a send, the bubble floats into the conversati
 and a fresh one expands in its place. Reduced-motion preferences skip this motion.
 While delivery is pending the draft is read-only; failed or uncertain sends keep
 it for recovery. This composer behavior is specific to the PWA.
+While a message will steer a running agent, the draft and its send animation use
+the same muted, dashed style as the pending message in chat. The draft returns to
+its normal appearance when that agent finishes or when Queue is selected.
 
 ## Install and pair
 

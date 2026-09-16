@@ -118,9 +118,22 @@
   box-shadow: 0 10px 24px #0003;
   transform-origin: center bottom;
 }
+.browser-app .composer-draft.composer-steering,
+.browser-app .composer-flight.composer-steering {
+  /* Match the pending steering message, including while the draft is focused. */
+  opacity: 0.7;
+  border: 1px dashed currentColor;
+  border-radius: 12px 12px 3px 12px;
+  background: #a8c8c00b;
+  color: #c6d5d9;
+  box-shadow: none;
+}
 .browser-app .composer textarea {
   display: block;
   resize: none;
+}
+.browser-app .composer-steering textarea {
+  color: inherit;
 }
 .browser-app .message-attachments {
   max-height: 100px;
@@ -355,6 +368,10 @@
   color: #bac8cb;
 }
 @media (max-width: 760px), (pointer: coarse) and (max-width: 1024px) {
+  .browser-app .composer-draft.composer-steering,
+  .browser-app .composer-flight.composer-steering {
+    border-radius: 16px 16px 4px 16px;
+  }
   .browser-app .connect-page {
     padding: 24px 24px 32px;
     justify-content: flex-start;
