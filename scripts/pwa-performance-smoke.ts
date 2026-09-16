@@ -93,6 +93,21 @@ export async function longConversationSmoke(page: Page, host: HostService) {
     return rpc(method, params);
   };
   const panel = page.locator(".chat-scroll");
+  const toolLayout = () =>
+    page.waitForFunction(() => {
+      const tool = document.querySelector(
+        '[data-message-key="long-turn/long-1"]',
+      )!;
+      const next = document.querySelector(
+        '[data-message-key="long-turn/long-2"]',
+      )!;
+      return (
+        Math.abs(
+          next.getBoundingClientRect().top -
+            tool.getBoundingClientRect().bottom,
+        ) < 2
+      );
+    });
   const bottom = async () => {
     await panel.evaluate((element) => {
       element.scrollTop = element.scrollHeight;
@@ -157,6 +172,9 @@ export async function longConversationSmoke(page: Page, host: HostService) {
     await firstTool.locator("summary").click();
     await firstTool.locator("pre").waitFor();
     assert.match(await firstTool.locator("pre").innerText(), /Tool output 1/);
+    // Visible content can precede the virtualizer's ResizeObserver measurement.
+    // Wait for adjacent rows to settle before jumping to the measured bottom.
+    await toolLayout();
     await bottom();
     assert.equal(
       await page.getByText("Long request 0", { exact: true }).count(),
@@ -167,6 +185,7 @@ export async function longConversationSmoke(page: Page, host: HostService) {
     await firstTool.locator("pre").waitFor();
     await firstTool.locator("summary").click();
     await firstTool.locator("pre").waitFor({ state: "detached" });
+    await toolLayout();
 
     // Loading older history must retain the reader's visible message and offset.
     const before = await page
