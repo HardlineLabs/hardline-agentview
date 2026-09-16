@@ -161,6 +161,8 @@ Typing does not rerender unchanged messages, and streamed updates are grouped by
 animation frame. These browser optimizations do not change Host history or the
 Windows client. Browser Find and text selection only cover currently mounted
 messages in a long chat; use Copy on a visible message to copy its full text.
+Loading the oldest page removes the history control in the same layout update as
+the new rows, preserving the reading position through delayed height measurements.
 
 If a new conversation's saved history is still being written, the accepted turn
 stays visible with **Loading saved history** until it can be read. Sending does

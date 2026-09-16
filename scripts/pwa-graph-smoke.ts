@@ -124,6 +124,22 @@ export async function graphStationSmoke(page: Page) {
     await page.getByRole("button", { name: "Fit graph", exact: true }).click();
     await page.waitForTimeout(2000);
     const scene = page.locator(".graph-scene");
+    // Software WebKit may still be settling the force layout after the zoom.
+    // Compare filters only once the underlying scene is stable.
+    await page.waitForFunction(
+      () => {
+        const image = document
+          .querySelector<HTMLCanvasElement>(".graph-scene")!
+          .toDataURL();
+        if ((window as any).lastSceneImage !== image) {
+          (window as any).lastSceneImage = image;
+          (window as any).lastSceneChange = performance.now();
+        }
+        return performance.now() - (window as any).lastSceneChange > 500;
+      },
+      null,
+      { polling: 200, timeout: 45_000 },
+    );
     const beforeFilter = await scene.evaluate((c: HTMLCanvasElement) =>
       c.toDataURL(),
     );
@@ -149,6 +165,10 @@ export async function graphStationSmoke(page: Page) {
     await page.locator(".note-inspector").waitFor();
     await page.getByTitle("Close note", { exact: true }).click();
   } finally {
-    await page.evaluate(() => (window as any).restoreGraphDrawing());
+    await page.evaluate(() => {
+      (window as any).restoreGraphDrawing();
+      delete (window as any).lastSceneImage;
+      delete (window as any).lastSceneChange;
+    });
   }
 }

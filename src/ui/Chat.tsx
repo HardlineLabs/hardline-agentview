@@ -965,6 +965,7 @@ export function Chat(props: Props) {
             {browser ? (
               <BrowserTranscript
                 key={props.thread.id}
+                hasEarlier={Boolean(props.page?.nextCursor)}
                 turns={props.page?.turns || emptyTurns}
                 scroll={scroll}
                 follow={follow}
