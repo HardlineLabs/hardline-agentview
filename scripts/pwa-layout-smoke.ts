@@ -335,12 +335,14 @@ export async function safeAreaSmoke(
   engine: string,
   captures?: string,
 ) {
-  await page.addInitScript(() =>
+  await page.addInitScript(() => {
+    // The absent-client test navigates outside the app to an opaque blank page.
+    if (location.origin === "null") return;
     Object.defineProperty(navigator, "standalone", {
       configurable: true,
       value: sessionStorage.getItem("test-standalone") === "true",
-    }),
-  );
+    });
+  });
   await page.evaluate(() => sessionStorage.setItem("test-standalone", "true"));
   await page.reload();
   await page
