@@ -195,7 +195,12 @@ export async function longConversationSmoke(page: Page, host: HostService) {
     await page
       .getByRole("button", { name: "Earlier messages" })
       .waitFor({ state: "detached" });
-    await page.waitForTimeout(250);
+    await page.waitForFunction((y) => {
+      const anchor = document.querySelector(
+        '[data-message-key="long-turn/long-0"] .user-message > div',
+      );
+      return anchor && Math.abs(anchor.getBoundingClientRect().top - y) < 10;
+    }, before!.y);
     const after = await page
       .getByText("Long request 0", { exact: true })
       .boundingBox();
