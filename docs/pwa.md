@@ -202,7 +202,10 @@ states, checks layout retention and wake-up, and records three 3-second samples 
 state. Run with `AGENTVIEW_PWA_ENERGY_ONLY=1` and `npm run pwa:smoke`; it also runs
 in the full suite. `AGENTVIEW_PWA_CAPTURES` saves screenshots and measurement JSON.
 `AGENTVIEW_ENERGY_BASELINE=1` permits the old continuous-rendering behavior when
-measuring an earlier client build. Canvas work and Chromium main-thread time are
+measuring an earlier client build; set `AGENTVIEW_PWA_BUILD` to that checkout's
+`dist/client` directory. Baselines allow 60 seconds for slow software-rendered
+layouts to settle; current clients must become idle within 45 seconds.
+Canvas work and Chromium main-thread time are
 performance/battery-cost proxies on the test workstation, not measured phone
 battery life. Physical iPhone validation remains separate.
 

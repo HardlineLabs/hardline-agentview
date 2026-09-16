@@ -19,6 +19,10 @@ export default defineConfig(({ mode }) => ({
             },
             transformIndexHtml(html: string) {
               return html
+                .replace(
+                  'name="theme-color" content="#0b1014"',
+                  'name="theme-color" content="#05090d"',
+                )
                 .replace("img-src 'self' data:", "img-src 'self' data: blob:")
                 .replace("connect-src 'self'", "connect-src 'self' wss:")
                 .replace(
