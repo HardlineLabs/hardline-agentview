@@ -885,6 +885,10 @@ function ClientApp() {
       }
       if (event.type === "preferences")
         setSnapshot((s) => (s ? { ...s, preferences: event.preferences } : s));
+      if (event.type === "autoApprove")
+        setSnapshot((s) =>
+          s ? { ...s, autoApproveThreads: event.threads } : s,
+        );
       if (event.type === "requestRecovered")
         notify(
           "An earlier action was accepted by the host. Check Inbox for its conversation.",
@@ -1629,6 +1633,18 @@ function ClientApp() {
             </main>
             {(chatOpen || browser) && (
               <Chat
+                autoApproveSupported={Array.isArray(
+                  snapshot.autoApproveThreads,
+                )}
+                autoApproveEnabled={snapshot.autoApproveThreads?.includes(
+                  currentThread?.id || "",
+                )}
+                fullAccess={snapshot.preferences?.defaultPermissions === "full"}
+                approvalActivity={snapshot.activity.filter(
+                  (a) =>
+                    a.threadId === currentThread?.id &&
+                    a.action === "auto-approved",
+                )}
                 expanded={browser && Boolean(snapshot.capabilities)}
                 onboarding={snapshot.preferences?.onboarding}
                 onCleared={newChat}

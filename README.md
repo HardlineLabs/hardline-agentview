@@ -71,6 +71,13 @@ or Enter to send more direction without stopping its turn. **Stop agent** remain
 available separately. Steering applies to turns running in AgentView; an existing
 Desktop conversation still continues in a new AgentView branch.
 
+For fewer interruptions, select Full access in workspace settings and turn on
+**Auto-approve** in a chat. Host automatically accepts supported command, file-change
+and permission requests for that conversation, including while your phone is away.
+New chats default to manual approval; questions and sign-in flows still need you.
+Turn it off at any time. Requires Host 0.4.3-dev.3 or later; see
+[approval behavior](docs/host-operation.md#permissions-and-computer-use).
+
 Agents travel at a calm, display-independent pace. Bright animated connections
 reach toward the file they are using. Command work without a known file target
 connects to the separate **Terminal** node; other work connects to **Agent

@@ -593,6 +593,24 @@ kbd {
   margin-left: auto;
   color: #7f969f;
 }
+.chat-management .auto-approve-toggle[aria-pressed="true"] {
+  color: #79e2d0;
+}
+.auto-approve-history {
+  font-size: 11px;
+  margin-bottom: 10px;
+  width: 100%;
+  color: var(--muted);
+}
+.auto-approve-history summary {
+  cursor: pointer;
+}
+.auto-approve-history ul {
+  max-height: 100px;
+  overflow: auto;
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
 .chat-management {
   display: flex;
   align-items: center;

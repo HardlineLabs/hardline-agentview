@@ -1,4 +1,35 @@
 import { execFile } from "node:child_process";
+import type { Approval } from "../shared/types";
+
+// Only requests whose complete answer is a permission decision are eligible.
+// Questions, MCP forms/URL flows and unknown methods still need the user.
+export function automaticApproval(request: Approval) {
+  if (
+    [
+      "item/commandExecution/requestApproval",
+      "item/fileChange/requestApproval",
+    ].includes(request.method)
+  ) {
+    const decisions = request.params.availableDecisions;
+    if (
+      decisions !== undefined &&
+      (!Array.isArray(decisions) || !decisions.includes("accept"))
+    )
+      return;
+    return { decision: "accept" };
+  }
+  if (request.method === "item/permissions/requestApproval") {
+    const permissions = request.params.permissions;
+    if (
+      !permissions ||
+      typeof permissions !== "object" ||
+      Array.isArray(permissions)
+    )
+      return;
+    return { permissions, scope: "turn" };
+  }
+}
+
 export type PermissionMode = "full" | "workspace" | "read-only";
 export function permissionMode(value: unknown): PermissionMode {
   if (!["full", "workspace", "read-only"].includes(String(value)))

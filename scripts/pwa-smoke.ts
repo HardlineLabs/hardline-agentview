@@ -8,6 +8,7 @@ import QRCode from "qrcode";
 import { graphStationSmoke } from "./pwa-graph-smoke";
 import { chatRecoverySmoke, historyOrderSmoke } from "./pwa-chat-smoke";
 import { longConversationSmoke } from "./pwa-performance-smoke";
+import { autoApproveSmoke } from "./pwa-auto-approve-smoke";
 import { DatabaseSync } from "node:sqlite";
 import { randomInt, randomBytes } from "node:crypto";
 import { PairingRegistry, type Sql } from "../src/pairing/registry";
@@ -45,6 +46,12 @@ const types: Record<string, string> = {
 };
 const server = createServer(async (req, res) => {
   const url = new URL(req.url!, "http://localhost");
+  if (url.pathname === "/fixture-away.html") {
+    res
+      .writeHead(200, { "Content-Type": "text/html" })
+      .end("<!doctype html><title>Away</title>");
+    return;
+  }
   if (url.pathname.startsWith("/api/pair/")) {
     await new Promise((resolve) => setTimeout(resolve, 150));
     let body = "";
@@ -425,6 +432,7 @@ async function expandedWorkspace(page: Page, engine: string) {
   } finally {
     first.codex.respond = originalRespond;
   }
+  await autoApproveSmoke(page, first, approvalThread.id);
   await page.getByRole("button", { name: "Recovery", exact: true }).click();
   await page.getByText("Saved in the host runtime", { exact: true }).waitFor();
   await page
@@ -488,6 +496,11 @@ async function expandedWorkspace(page: Page, engine: string) {
 }
 try {
   for (const engine of [chromium, webkit]) {
+    if (
+      process.env.AGENTVIEW_PWA_BROWSER &&
+      process.env.AGENTVIEW_PWA_BROWSER !== engine.name()
+    )
+      continue;
     const browser = await engine.launch();
     // The exemption applies only to these ephemeral local fixture certificates.
     // Production/public-path tests must use normal certificate validation.
