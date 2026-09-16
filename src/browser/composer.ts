@@ -34,9 +34,21 @@ export function useBrowserComposer(
       if (follow.current) scroll.scrollTop = scroll.scrollHeight;
     };
     resize();
-    const observer = new ResizeObserver(resize);
+    let frame = 0;
+    const observer = new ResizeObserver(() => {
+      // Changing the input also resizes the observed composer and transcript.
+      // Let that layout settle before measuring again (especially in WebKit).
+      if (!frame)
+        frame = requestAnimationFrame(() => {
+          frame = 0;
+          resize();
+        });
+    });
     for (const child of panel.children) observer.observe(child);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+    };
   }, [enabled, input, follow, text, chatId]);
 
   useLayoutEffect(
