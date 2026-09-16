@@ -1,12 +1,4 @@
-import {
-  memo,
-  useContext,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { memo, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { BrowserTranscript, BrowserToolState } from "../browser/Transcript";
 import {
   ArrowUp,
@@ -29,6 +21,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { ChoicePicker } from "../browser/ChoicePicker";
+import { useBrowserComposer } from "../browser/composer";
 import { ContextUsage } from "./Usage";
 import { ElicitationFields } from "./ElicitationFields";
 import {
@@ -463,17 +456,12 @@ export function Chat(props: Props) {
     observer.observe(panel);
     return () => observer.disconnect();
   }, []);
-  useLayoutEffect(() => {
-    if (!browser || !input.current) return;
-    const element = input.current;
-    const resize = () => {
-      element.style.height = "auto";
-      element.style.height = `${element.scrollHeight}px`;
-    };
-    resize();
-    window.addEventListener("resize", resize);
-    return () => window.removeEventListener("resize", resize);
-  }, [text, props.thread?.id]);
+  const animateSend = useBrowserComposer(
+    input,
+    browser,
+    text,
+    props.thread?.id,
+  );
   const send = async (onboardingText?: string) => {
     const outgoingText = onboardingText ?? text;
     if (
@@ -542,6 +530,7 @@ export function Chat(props: Props) {
       browserAttachments.delete(draftId);
       persist();
       if (currentChat.current !== draftId) return;
+      if (!onboardingText) animateSend();
       setAttachments([]);
       setText("");
       props.onDetach();
@@ -1081,78 +1070,84 @@ export function Chat(props: Props) {
           </div>
         )}
         <div className="composer">
-          {props.expanded && (
-            <>
-              <input
-                ref={fileInput}
-                type="file"
-                multiple
-                hidden
-                aria-label="Attach files or images"
-                onChange={(e) => void upload(e.target.files)}
-              />
-              <div className="message-attachments">
-                {attachments.map((a) => (
-                  <div key={a.id}>
-                    {a.preview && <img src={a.preview} alt={a.name} />}
-                    <span>{a.name}</span>
-                    <button
-                      aria-label={`Remove ${a.name}`}
-                      onClick={() => {
-                        const next = attachments.filter(
-                          (item) => item.id !== a.id,
-                        );
-                        setAttachments(next);
-                        browserAttachments.set(props.thread?.id || "new", next);
-                        persist();
-                      }}
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
+          <div className="composer-draft">
+            {props.expanded && (
+              <>
+                <input
+                  ref={fileInput}
+                  type="file"
+                  multiple
+                  hidden
+                  aria-label="Attach files or images"
+                  onChange={(e) => void upload(e.target.files)}
+                />
+                <div className="message-attachments">
+                  {attachments.map((a) => (
+                    <div key={a.id}>
+                      {a.preview && <img src={a.preview} alt={a.name} />}
+                      <span>{a.name}</span>
+                      <button
+                        aria-label={`Remove ${a.name}`}
+                        onClick={() => {
+                          const next = attachments.filter(
+                            (item) => item.id !== a.id,
+                          );
+                          setAttachments(next);
+                          browserAttachments.set(
+                            props.thread?.id || "new",
+                            next,
+                          );
+                          persist();
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+            {props.attachment && (
+              <div className="attached-note">
+                <FileText size={12} />
+                <span>{props.attachment.title}</span>
+                <button onClick={props.onDetach} title="Remove attachment">
+                  <X size={12} />
+                </button>
               </div>
-            </>
-          )}
-          {props.attachment && (
-            <div className="attached-note">
-              <FileText size={12} />
-              <span>{props.attachment.title}</span>
-              <button onClick={props.onDetach} title="Remove attachment">
-                <X size={12} />
-              </button>
-            </div>
-          )}
-          <textarea
-            ref={input}
-            aria-label="Message your agent"
-            placeholder={
-              props.connected
-                ? active
-                  ? "Steer the agent while it works…"
-                  : "Give your ideas somewhere to go…"
-                : "Reconnect to continue…"
-            }
-            value={text}
-            disabled={props.thread?.archived}
-            onChange={(e) => {
-              setText(e.target.value);
-              drafts.current.set(props.thread?.id || "new", e.target.value);
-              persist();
-            }}
-            onKeyDown={(e) => {
-              if (
-                !window.matchMedia("(pointer: coarse)").matches &&
-                e.key === "Enter" &&
-                !e.shiftKey &&
-                !e.nativeEvent.isComposing
-              ) {
-                e.preventDefault();
-                void send();
+            )}
+            <textarea
+              ref={input}
+              aria-label="Message your agent"
+              placeholder={
+                props.connected
+                  ? active
+                    ? "Steer the agent while it works…"
+                    : "Give your ideas somewhere to go…"
+                  : "Reconnect to continue…"
               }
-            }}
-            rows={browser ? 1 : 3}
-          />
+              value={text}
+              disabled={props.thread?.archived}
+              readOnly={browser && sending}
+              onChange={(e) => {
+                setText(e.target.value);
+                drafts.current.set(props.thread?.id || "new", e.target.value);
+                persist();
+              }}
+              onKeyDown={(e) => {
+                if (
+                  !window.matchMedia("(pointer: coarse)").matches &&
+                  e.key === "Enter" &&
+                  !e.shiftKey &&
+                  !e.nativeEvent.isComposing
+                ) {
+                  e.preventDefault();
+                  void send();
+                }
+              }}
+              rows={browser ? 1 : 3}
+            />
+          </div>
           <div className="composer-bottom">
             {props.expanded && (
               <button

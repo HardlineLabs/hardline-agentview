@@ -102,6 +102,31 @@ export async function historyOrderSmoke(page: Page, host: HostService) {
 // Exercise the real UI and encrypted Host API while independently controlling
 // runtime acknowledgement, input delivery and persistence timing.
 export async function chatRecoverySmoke(page: Page, host: HostService) {
+  await page.evaluate(() => {
+    (window as any).composerFlights = [];
+    const observer = new MutationObserver((records) => {
+      for (const record of records)
+        for (const node of record.addedNodes) {
+          if (
+            node instanceof HTMLElement &&
+            node.classList.contains("composer-flight")
+          )
+            (window as any).composerFlights.push({
+              text: node.textContent,
+              hidden: node.getAttribute("aria-hidden"),
+              motion: (
+                node.getAnimations()[0]?.effect as KeyframeEffect
+              )?.getKeyframes(),
+              replacement: document
+                .querySelector(".composer-draft")!
+                .getAnimations().length,
+            });
+        }
+    });
+    observer.observe(document.querySelector(".chat-panel")!, {
+      childList: true,
+    });
+  });
   const rpc = host.codex.rpc;
   const name = `Chat recovery ${crypto.randomUUID()}`;
   let thread: any, turn: any, start: any, steer: any;
@@ -177,6 +202,18 @@ export async function chatRecoverySmoke(page: Page, host: HostService) {
       .filter({ hasText: "Keep this accepted message visible" })
       .waitFor();
     await page.getByText("Loading saved history…", { exact: true }).waitFor();
+    const flights = await page.evaluate(() => (window as any).composerFlights);
+    assert.equal(
+      flights.length,
+      1,
+      "Accepted send detaches one decorative bubble",
+    );
+    assert.equal(flights[0].text, "Keep this accepted message visible");
+    assert.equal(flights[0].hidden, "true");
+    assert.equal(flights[0].replacement, 1, "The replacement bubble expands");
+    assert.match(flights[0].motion.at(-1).transform, /-110px/);
+    await page.locator(".composer-flight").waitFor({ state: "detached" });
+    assert.equal(await page.getByLabel("Message your agent").inputValue(), "");
     assert.equal(start.effort, "low");
     assert.equal(
       await page
@@ -210,8 +247,24 @@ export async function chatRecoverySmoke(page: Page, host: HostService) {
     while (!acknowledge && Date.now() < deadline)
       await new Promise((resolve) => setTimeout(resolve, 10));
     assert.ok(acknowledge, "Steering must reach the fixture runtime");
+    assert.equal(
+      await page
+        .getByLabel("Message your agent")
+        .evaluate((input: HTMLTextAreaElement) => input.readOnly),
+      true,
+    );
+    assert.equal(
+      await page.getByLabel("Message your agent").inputValue(),
+      "Please include the alternate case",
+      "Pending delivery retains its draft",
+    );
     acknowledge();
     await pending.getByText("Waiting for agent", { exact: true }).waitFor();
+    await page.locator(".composer-flight").waitFor({ state: "detached" });
+    assert.equal(
+      await page.evaluate(() => (window as any).composerFlights.length),
+      2,
+    );
     const item = {
       id: crypto.randomUUID(),
       clientId: steer.clientUserMessageId,
@@ -241,6 +294,7 @@ export async function chatRecoverySmoke(page: Page, host: HostService) {
     );
 
     // Repeated text is a different message. Delivery can also beat acknowledgement.
+    await page.emulateMedia({ reducedMotion: "reduce" });
     acknowledge = undefined;
     await page
       .getByLabel("Message your agent")
@@ -274,6 +328,12 @@ export async function chatRecoverySmoke(page: Page, host: HostService) {
       0,
       "Late acknowledgement must not recreate the delivered bubble",
     );
+    assert.equal(
+      await page.evaluate(() => (window as any).composerFlights.length),
+      2,
+      "Reduced motion skips flight and replacement animation",
+    );
+    await page.emulateMedia({ reducedMotion: "no-preference" });
     assert.equal(
       await page
         .locator(".turn .user-message")
@@ -329,12 +389,21 @@ export async function chatRecoverySmoke(page: Page, host: HostService) {
       .waitFor();
     await pending.waitFor({ state: "detached" });
     rejectSteer = true;
+    await page.locator(".composer-flight").waitFor({ state: "detached" });
+    const beforeRejected = await page.evaluate(
+      () => (window as any).composerFlights.length,
+    );
     await page
       .getByLabel("Message your agent")
       .fill("Retain rejected direction");
     await page.getByTitle("Steer agent", { exact: true }).click();
     await page.getByText(/The active turn changed/).waitFor();
     assert.equal(await pending.count(), 0);
+    assert.equal(
+      await page.evaluate(() => (window as any).composerFlights.length),
+      beforeRejected,
+      "Rejected sends do not animate or clear the draft",
+    );
     assert.equal(
       await page.getByLabel("Message your agent").inputValue(),
       "Retain rejected direction",
