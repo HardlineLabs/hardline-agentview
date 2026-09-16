@@ -318,7 +318,7 @@ export async function chatRecoverySmoke(
     );
     assert.equal(steeringFlight.steering, true);
     assert.equal(
-      steeringFlight.motion[0].opacity,
+      Number(steeringFlight.motion[0].opacity),
       0.7,
       "The flying steering bubble keeps its muted pending style",
     );
