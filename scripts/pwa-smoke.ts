@@ -46,12 +46,6 @@ const types: Record<string, string> = {
 };
 const server = createServer(async (req, res) => {
   const url = new URL(req.url!, "http://localhost");
-  if (url.pathname === "/fixture-away.html") {
-    res
-      .writeHead(200, { "Content-Type": "text/html" })
-      .end("<!doctype html><title>Away</title>");
-    return;
-  }
   if (url.pathname.startsWith("/api/pair/")) {
     await new Promise((resolve) => setTimeout(resolve, 150));
     let body = "";
@@ -515,7 +509,10 @@ try {
     page.setDefaultTimeout(15_000);
     await installViewportFixture(page);
     const errors: string[] = [];
-    page.on("pageerror", (error) => errors.push(error.message));
+    page.on("pageerror", (error) => {
+      errors.push(error.message);
+      console.error(`${engine.name()} page error at ${page.url()}:`, error);
+    });
     try {
       const blocked = await context.newPage();
       await blocked.addInitScript(() => {
@@ -806,7 +803,7 @@ try {
       });
       assert.equal(rawStorage.sealed, true);
       assert.ok(!rawStorage.plain.includes("secret"));
-      await chatRecoverySmoke(page, first);
+      await chatRecoverySmoke(page, first, captures);
       await historyOrderSmoke(page, first);
       await longConversationSmoke(page, first);
       await expandedWorkspace(page, engine.name());

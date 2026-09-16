@@ -38,7 +38,7 @@ async function viewport(
   );
 }
 
-async function geometry(page: Page, height: number, top = 0) {
+async function geometry(page: Page, height: number, top = 0, minimumChat = 60) {
   await page.waitForFunction(
     ({ height, top }) => {
       const app = document
@@ -74,7 +74,33 @@ async function geometry(page: Page, height: number, top = 0) {
   assert.ok(measurements.horizontalOverflow <= 1, JSON.stringify(measurements));
   assert.ok(measurements.composerVisible, JSON.stringify(measurements));
   assert.ok(measurements.sendVisible, JSON.stringify(measurements));
-  assert.ok(measurements.chatHeight >= 60, JSON.stringify(measurements));
+  assert.ok(
+    measurements.chatHeight >= minimumChat,
+    JSON.stringify(measurements),
+  );
+}
+
+async function fullDraft(page: Page) {
+  await page.waitForFunction(() => {
+    const chat = document
+      .querySelector(".chat-scroll")!
+      .getBoundingClientRect();
+    const draft = document
+      .querySelector(".composer-draft")!
+      .getBoundingClientRect();
+    const controls = document
+      .querySelector(".composer-bottom")!
+      .getBoundingClientRect();
+    const input = document.querySelector("textarea")!;
+    return (
+      chat.height >= 35 &&
+      chat.height < 38 &&
+      draft.top >= chat.bottom &&
+      draft.top < chat.bottom + 60 &&
+      draft.bottom <= controls.top &&
+      input.scrollHeight > input.clientHeight
+    );
+  });
 }
 
 export async function layoutSmoke(
@@ -89,7 +115,11 @@ export async function layoutSmoke(
       await page
         .locator(".chat-scroll")
         .evaluate((e, y) => e.scrollBy(0, y), delta);
-    else await page.mouse.wheel(0, delta);
+    else {
+      // A full draft leaves a narrow transcript; reacquire it after viewport moves.
+      await page.locator(".chat-scroll").hover();
+      await page.mouse.wheel(0, delta);
+    }
   };
   await page.setViewportSize({ width: 390, height: 844 });
   const input = page.getByLabel("Message your agent");
@@ -100,6 +130,17 @@ export async function layoutSmoke(
   await input.blur();
   const compactHeight = (await input.boundingBox())!.height;
   assert.ok(compactHeight <= 44, "Empty composer stays one line tall");
+  assert.ok(
+    await page
+      .locator(".composer-draft")
+      .evaluate(
+        (draft) =>
+          draft.getBoundingClientRect().bottom <=
+          document.querySelector(".composer-bottom")!.getBoundingClientRect()
+            .top,
+      ),
+    "Draft bubble sits separately above its controls",
+  );
   await input.fill("One\nTwo\nThree\nFour");
   assert.ok(
     (await input.boundingBox())!.height > compactHeight,
@@ -111,6 +152,13 @@ export async function layoutSmoke(
     (await input.boundingBox())!.height <= 44,
     "Clearing a draft shrinks the composer",
   );
+  await input.fill("A long draft line\n".repeat(100));
+  await fullDraft(page);
+  if (captures)
+    await page.screenshot({
+      path: path.join(captures, `${engine}-full-draft.png`),
+    });
+  await input.fill("");
   assert.ok(
     (await page.locator(".context-compact").boundingBox())!.height <= 36,
   );
@@ -157,7 +205,12 @@ export async function layoutSmoke(
   await input.fill(
     Array.from({ length: 40 }, (_, i) => `Draft line ${i + 1}`).join("\n"),
   );
-  await geometry(page, 380, 48);
+  await fullDraft(page);
+  await geometry(page, 380, 48, 35);
+  if (captures)
+    await page.screenshot({
+      path: path.join(captures, `${engine}-keyboard-full-draft.png`),
+    });
   // Scroll beyond both ends, including an attempted document scroll.
   const chat = page.locator(".chat-scroll");
   await chat.hover();
@@ -166,21 +219,22 @@ export async function layoutSmoke(
     () => document.querySelector(".chat-scroll")!.scrollTop < 2,
   );
   await viewport(page, 400, 24);
-  await geometry(page, 400, 24);
+  await geometry(page, 400, 24, 35);
+  await fullDraft(page);
   assert.ok(
     await chat.evaluate((e) => e.scrollTop < 2),
     "Reading older messages survives keyboard resizing",
   );
   await scrollChat(-100000);
   await page.evaluate(() => window.scrollTo(0, 10000));
-  await geometry(page, 400, 24);
+  await geometry(page, 400, 24, 35);
   await scrollChat(100000);
   await page.waitForFunction(() => {
     const chat = document.querySelector(".chat-scroll")!;
     return chat.scrollHeight - chat.scrollTop - chat.clientHeight < 3;
   });
   await scrollChat(100000);
-  await geometry(page, 400, 24);
+  await geometry(page, 400, 24, 35);
   await viewport(page, null);
   await input.blur();
   await input.fill(draft);
@@ -281,12 +335,14 @@ export async function safeAreaSmoke(
   engine: string,
   captures?: string,
 ) {
-  await page.addInitScript(() =>
+  await page.addInitScript(() => {
+    // The absent-client test navigates outside the app to an opaque blank page.
+    if (location.origin === "null") return;
     Object.defineProperty(navigator, "standalone", {
       configurable: true,
       value: sessionStorage.getItem("test-standalone") === "true",
-    }),
-  );
+    });
+  });
   await page.evaluate(() => sessionStorage.setItem("test-standalone", "true"));
   await page.reload();
   await page

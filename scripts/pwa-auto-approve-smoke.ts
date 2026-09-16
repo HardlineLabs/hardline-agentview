@@ -90,7 +90,8 @@ export async function autoApproveSmoke(
     });
     await page.locator(".approval-card").waitFor({ state: "detached" });
     const url = page.url().split("#")[0];
-    await page.goto(`${url}fixture-away.html`);
+    // Leave the app's service-worker scope as well as its WebSocket client.
+    await page.goto("about:blank");
     // No client is needed to answer the fixture runtime's request.
     emit("auto-away");
     assert.deepEqual(decisions.at(-1), {

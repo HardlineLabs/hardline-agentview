@@ -19,6 +19,19 @@ with the Windows client. Its static deployment delivers application
 files. Each phone pairs with its own Windows host; that host retains its vault,
 repositories, agent sign-in and execution. There is no shared hosted agent account.
 
+## Writing messages
+
+The message draft sits in its own bubble above the attachment, model and send
+controls. It starts at one line and grows toward Context as you type, then scrolls
+inside the bubble when the available space is full. It adapts to the keyboard and
+screen rotation. When Host accepts a send, the bubble floats into the conversation
+and a fresh one expands in its place. Reduced-motion preferences skip this motion.
+While delivery is pending the draft is read-only; failed or uncertain sends keep
+it for recovery. This composer behavior is specific to the PWA.
+While a message will steer a running agent, the draft and its send animation use
+the same muted, dashed style as the pending message in chat. The draft returns to
+its normal appearance when that agent finishes or when Queue is selected.
+
 ## Install and pair
 
 1. Open [agentviewapp.hardline-labs.com](https://agentviewapp.hardline-labs.com) in Safari on iPhone.

@@ -1104,6 +1104,9 @@ meter::-webkit-meter-optimum-value {
     border-color 0.2s,
     box-shadow 0.2s;
 }
+.composer-draft {
+  display: contents;
+}
 .composer:focus-within {
   border-color: #b8e1c84d;
   box-shadow:

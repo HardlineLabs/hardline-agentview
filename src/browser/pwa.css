@@ -75,13 +75,65 @@
 .browser-app .composer-area {
   flex: 0 0 auto;
   min-height: 0;
-  max-height: calc(100% - 64px);
+  max-height: 100%;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+.browser-app .chat-panel {
+  position: relative;
+}
+.browser-app .composer,
+.browser-app .composer:focus-within {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.browser-app .composer-draft {
+  display: block;
+  overflow: hidden;
+  border: 1px solid #b7d3d326;
+  border-radius: 14px;
+  background: linear-gradient(160deg, #1c272e, #172129);
+  box-shadow: 0 5px 18px #0002;
+  margin-bottom: 4px;
+  transform-origin: center bottom;
+}
+.browser-app .composer-draft:focus-within {
+  border-color: #b8e1c84d;
+}
+.browser-app .composer-flight {
+  position: absolute;
+  z-index: 5;
+  pointer-events: none;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 8px 12px 4px;
+  border: 1px solid #b8e1c84d;
+  border-radius: 14px;
+  background: #1c2d32;
+  color: #c4d4d7;
+  font-size: 16px;
+  line-height: 1.5;
+  box-shadow: 0 10px 24px #0003;
+  transform-origin: center bottom;
+}
+.browser-app .composer-draft.composer-steering,
+.browser-app .composer-flight.composer-steering {
+  /* Match the pending steering message, including while the draft is focused. */
+  opacity: 0.7;
+  border: 1px dashed currentColor;
+  border-radius: 12px 12px 3px 12px;
+  background: #a8c8c00b;
+  color: #c6d5d9;
+  box-shadow: none;
 }
 .browser-app .composer textarea {
   display: block;
   resize: none;
+}
+.browser-app .composer-steering textarea {
+  color: inherit;
 }
 .browser-app .message-attachments {
   max-height: 100px;
@@ -316,6 +368,10 @@
   color: #bac8cb;
 }
 @media (max-width: 760px), (pointer: coarse) and (max-width: 1024px) {
+  .browser-app .composer-draft.composer-steering,
+  .browser-app .composer-flight.composer-steering {
+    border-radius: 16px 16px 4px 16px;
+  }
   .browser-app .connect-page {
     padding: 24px 24px 32px;
     justify-content: flex-start;
@@ -589,9 +645,8 @@
     margin-bottom: 5px;
   }
   .pwa-compact .browser-app .composer textarea {
-    height: 40px;
-    min-height: 40px;
-    max-height: 40px;
+    min-height: 36px;
+    max-height: none;
     padding-top: 8px;
   }
   .pwa-compact .browser-app .chat-management {
@@ -786,8 +841,8 @@
   background: #a8ddc51b;
 }
 .browser-app .composer textarea {
-  min-height: 40px;
-  max-height: min(128px, calc(var(--app-height, 100dvh) * 0.22));
+  min-height: 36px;
+  max-height: none;
   padding: 8px 12px 4px;
   line-height: 1.5;
 }
@@ -855,8 +910,8 @@
     flex: 1;
   }
   .pwa-compact .browser-app .composer textarea {
-    min-height: 40px;
-    max-height: min(100px, calc(var(--app-height, 100dvh) * 0.18));
+    min-height: 36px;
+    max-height: none;
     padding-top: 8px;
   }
   .pwa-keyboard .browser-app .pwa-bar {
