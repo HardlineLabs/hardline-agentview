@@ -4,7 +4,7 @@
   height: 100%;
   overflow: hidden;
   overscroll-behavior: none;
-  background-color: #0c141a;
+  background-color: #05090d;
 }
 .pwa-document {
   --pwa-safe-top: env(safe-area-inset-top, 0px);
@@ -33,6 +33,7 @@
   overflow: hidden;
 }
 .browser-app {
+  background: #05090d;
   height: 100%;
   min-height: 0;
   min-width: 0;
@@ -42,6 +43,68 @@
   padding-right: env(safe-area-inset-right, 0px);
   padding-bottom: var(--pwa-bottom-space);
   padding-left: env(safe-area-inset-left, 0px);
+}
+/* Quiet surfaces keep the existing domain colors and blue accents legible.
+   Flat graph controls avoid repeatedly compositing blur over a moving canvas. */
+.browser-app .brain-panel {
+  background: #030609;
+}
+.browser-app .chat-panel {
+  background: #080e13;
+}
+.browser-app .sidebar,
+.browser-app .app-header,
+.browser-app .mobile-header {
+  background: #0a1118;
+}
+.browser-app .graph-vignette {
+  display: none;
+}
+.browser-app .graph-surface > canvas:not(.graph-scene) {
+  position: relative;
+  z-index: 1;
+}
+.browser-app .graph-surface > .graph-scene {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.browser-app .brain-panel::after {
+  display: none;
+}
+.browser-app .graph-controls,
+.browser-app .graph-tooltip {
+  background: #101a23;
+  border-color: #88b8df26;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+.browser-app .graph-controls button.enabled {
+  color: #9ccbf1;
+}
+.browser-app .graph-domains button.chosen {
+  background: #82b5df14;
+  color: #cadce9;
+}
+.browser-app .graph-bottom {
+  background: none;
+}
+.browser-app .moment-orb,
+.browser-app .moment-orb.busy {
+  width: 9px;
+  height: 9px;
+  background: #739eb6;
+  box-shadow: none;
+  animation: none;
+}
+.browser-app .moment-orb.busy {
+  background: #a7dfca;
+}
+.browser-app .brain-top h1 {
+  color: #d6e3ed;
+}
+.browser-app .graph-moment strong {
+  color: #a8c0d2;
 }
 .pwa-keyboard .browser-app {
   padding-bottom: 0;

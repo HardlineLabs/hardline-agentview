@@ -8,6 +8,7 @@ import QRCode from "qrcode";
 import { graphStationSmoke } from "./pwa-graph-smoke";
 import { chatRecoverySmoke, historyOrderSmoke } from "./pwa-chat-smoke";
 import { longConversationSmoke } from "./pwa-performance-smoke";
+import { energySmoke } from "./pwa-energy-smoke";
 import { autoApproveSmoke } from "./pwa-auto-approve-smoke";
 import { DatabaseSync } from "node:sqlite";
 import { randomInt, randomBytes } from "node:crypto";
@@ -23,6 +24,9 @@ import {
 // runtime is a deterministic fixture. Never uses the developer's vault/account.
 const temporary = await mkdtemp(path.join(os.tmpdir(), "agentview-pwa-"));
 const captures = process.env.AGENTVIEW_PWA_CAPTURES;
+const clientRoot = path.resolve(
+  process.env.AGENTVIEW_PWA_BUILD || "dist/client",
+);
 if (captures) await mkdir(captures, { recursive: true });
 const hosts: HostService[] = [];
 let updateVersion = false;
@@ -68,10 +72,10 @@ const server = createServer(async (req, res) => {
     return;
   }
   const file = path.resolve(
-    "dist/client",
+    clientRoot,
     "." + (url.pathname === "/" ? "/index.html" : url.pathname),
   );
-  if (!file.startsWith(path.resolve("dist/client") + path.sep)) {
+  if (!file.startsWith(clientRoot + path.sep)) {
     res.writeHead(403).end();
     return;
   }
@@ -651,6 +655,13 @@ try {
         console.log(`${engine.name()}: long-conversation regression passed`);
         continue;
       }
+      if (process.env.AGENTVIEW_PWA_ENERGY_ONLY === "1") {
+        await energySmoke(page, first);
+        await longConversationSmoke(page, first);
+        assert.deepEqual(errors, []);
+        continue;
+      }
+      await energySmoke(page, first);
       await page.getByLabel("Message your agent").fill("A draft worth keeping");
       await page.locator(".mobile-live").click();
       await page

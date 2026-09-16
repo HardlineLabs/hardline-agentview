@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { X, Camera, LoaderCircle } from "lucide-react";
-import jsQR from "jsqr";
 import { sixDigitCode } from "../shared/pairing-code";
 
 export function Scanner({
@@ -17,6 +16,7 @@ export function Scanner({
     let stopped = false;
     let stream: MediaStream | undefined;
     let timer: ReturnType<typeof setTimeout>;
+    let jsQR: typeof import("jsqr").default;
     const canvas = document.createElement("canvas");
     const context = canvas.getContext("2d", { willReadFrequently: true })!;
     const scan = () => {
@@ -55,6 +55,9 @@ export function Scanner({
     };
     void (async () => {
       try {
+        // QR decoding is only needed while pairing with the camera.
+        jsQR = (await import("jsqr")).default;
+        if (stopped) return;
         if (!navigator.mediaDevices?.getUserMedia)
           throw new Error(
             "Camera unavailable. Open the HTTPS app in Safari, or paste the invitation instead.",
