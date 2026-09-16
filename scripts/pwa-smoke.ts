@@ -46,12 +46,6 @@ const types: Record<string, string> = {
 };
 const server = createServer(async (req, res) => {
   const url = new URL(req.url!, "http://localhost");
-  if (url.pathname === "/fixture-away.html") {
-    res
-      .writeHead(200, { "Content-Type": "text/html" })
-      .end("<!doctype html><title>Away</title>");
-    return;
-  }
   if (url.pathname.startsWith("/api/pair/")) {
     await new Promise((resolve) => setTimeout(resolve, 150));
     let body = "";
@@ -518,17 +512,6 @@ try {
     page.on("pageerror", (error) => {
       errors.push(error.message);
       console.error(`${engine.name()} page error at ${page.url()}:`, error);
-      void page
-        .evaluate(() => ({
-          online: navigator.onLine,
-          state: document.readyState,
-        }))
-        .then((state) => console.error("Browser error state", state))
-        .catch(() => {});
-    });
-    page.on("requestfailed", (request) => {
-      if (new URL(request.url()).pathname === "/sw.js")
-        console.error("Worker request failure", request.failure());
     });
     try {
       const blocked = await context.newPage();
@@ -720,12 +703,6 @@ try {
         "Welcome to First. Your workspace stays on this computer.",
       );
       readDelay = 1500;
-      // Finish the reload's service-worker check before deliberately cutting
-      // the network. WebKit reports an interrupted worker script as a page error.
-      await page.evaluate(async () => {
-        const registration = await navigator.serviceWorker.ready;
-        await registration.update();
-      });
       await context.setOffline(true);
       await page.locator(".connection-pill.lost").waitFor();
       assert.equal(

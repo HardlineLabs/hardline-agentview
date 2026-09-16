@@ -87,10 +87,6 @@ export async function historyOrderSmoke(page: Page, host: HostService) {
     await checkOrder(5);
     await page.reload();
     await checkOrder(5);
-    await page.evaluate(async () => {
-      const registration = await navigator.serviceWorker.ready;
-      await registration.update();
-    });
     await page.context().setOffline(true);
     await page.locator(".connection-pill.lost").waitFor();
     await page.context().setOffline(false);

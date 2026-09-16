@@ -106,7 +106,7 @@ function VirtualTranscript({ turns, scroll, follow, Item }: Props) {
       // The Earlier messages control disappears after the oldest page. Its
       // height is outside the virtual list and must not shift the reading anchor.
       if (Math.abs(next - margin) > 0.5) {
-        if (!follow.current) panel.scrollTop += next - margin;
+        if (!follow.current) virtualizer.scrollBy(next - margin);
         setMargin(next);
       }
     };
@@ -114,7 +114,7 @@ function VirtualTranscript({ turns, scroll, follow, Item }: Props) {
     const observer = new ResizeObserver(measure);
     observer.observe(panel);
     return () => observer.disconnect();
-  }, [scroll, rows[0]?.key, margin, follow]);
+  }, [scroll, rows[0]?.key, margin, follow, virtualizer]);
   useLayoutEffect(() => {
     if (follow.current) virtualizer.scrollToEnd();
   }, [virtualizer]);
