@@ -243,6 +243,7 @@ export class HostFeatures {
           "thread.review",
           "thread.goal",
           "thread.interrupt",
+          "thread.autoApprove",
           "files.list",
           "files.read",
           "files.upload",

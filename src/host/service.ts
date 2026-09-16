@@ -42,8 +42,8 @@ import { Devices } from "./devices";
 import { HostTunnel } from "./tunnel";
 import { SecurePeer } from "./secure-peer";
 import { HostFeatures } from "./features";
-import { threadPolicy, turnPolicy } from "./permissions";
-import { saveState } from "./state";
+import { automaticApproval, threadPolicy, turnPolicy } from "./permissions";
+import { loadState, saveState } from "./state";
 import { version } from "../../package.json";
 import { elicitationContent } from "../shared/elicitation";
 
@@ -102,6 +102,8 @@ export class HostService extends EventEmitter {
   private agents = new Map<string, Agent>();
   private activity: Activity[] = [];
   private approvals = new Map<string | number, Approval>();
+  private autoApproveThreads = new Set<string>();
+  private approvalSettingsWrite: Promise<unknown> = Promise.resolve();
   private owned = new Set<string>();
   private loaded = new Set<string>();
   private activeTurns = new Map<string, string>();
@@ -159,13 +161,14 @@ export class HostService extends EventEmitter {
     });
     this.codex.on("notification", (message) => this.onAgentEvent(message));
     this.codex.on("request", (request) => {
+      this.approvals.set(request.id, request);
+      if (this.autoApprove(request)) return;
       if (request.params?.threadId)
         this.setAgent(request.params.threadId, {
           action: "waiting",
           active: true,
           detail: "Waiting for your response",
         });
-      this.approvals.set(request.id, request);
       void this.features
         .notice("Agent needs your input", request.params?.threadId)
         .catch(() => {});
@@ -186,6 +189,16 @@ export class HostService extends EventEmitter {
   async start() {
     await fs.mkdir(this.dataDir, { recursive: true });
     await this.features.load();
+    const autoApproveThreads = await loadState<unknown>(
+      path.join(this.dataDir, "auto-approve.json"),
+      [],
+    );
+    if (
+      !Array.isArray(autoApproveThreads) ||
+      autoApproveThreads.some((id) => typeof id !== "string")
+    )
+      throw new Error("Saved chat auto-approval settings are invalid.");
+    this.autoApproveThreads = new Set(autoApproveThreads);
     const certPath = path.join(this.dataDir, "host-identity.json");
     let identity: { private: string; cert: string; token: string };
     try {
@@ -395,6 +408,8 @@ export class HostService extends EventEmitter {
         this.approvals = new Map(
           state.approvals.map((a: Approval) => [a.id, a]),
         );
+        for (const request of this.approvals.values())
+          this.autoApprove(request);
       }
       if (this.codex.codexHome) {
         this.observer = new SessionObserver(this.codex.codexHome);
@@ -590,6 +605,13 @@ export class HostService extends EventEmitter {
   private onAgentEvent(message: any) {
     const { method, params: p } = message;
     if (!p) return;
+    if (method === "serverRequest/resolved") {
+      this.approvals.delete(p.requestId);
+      this.broadcast({
+        type: "approvals",
+        approvals: [...this.approvals.values()],
+      });
+    }
     const tid = p.threadId || p.thread?.id;
     if (method === "thread/tokenUsage/updated")
       this.setUsage(tid, p.tokenUsage);
@@ -711,6 +733,35 @@ export class HostService extends EventEmitter {
       this.broadcast({ type: "agentEvent", method, params: p });
   }
   async handle(method: string, p: any = {}, device = "local"): Promise<any> {
+    if (method === "thread.autoApprove") {
+      const change = this.approvalSettingsWrite
+        .catch(() => {})
+        .then(async () => {
+          if (typeof p.id !== "string" || typeof p.enabled !== "boolean")
+            throw new Error("Choose a chat and an auto-approval setting.");
+          if (
+            p.enabled &&
+            (!this.owned.has(p.id) ||
+              this.features.preferences.defaultPermissions !== "full")
+          )
+            throw new Error(
+              "Auto-approve requires Full access and an AgentView chat.",
+            );
+          const next = new Set(this.autoApproveThreads);
+          if (p.enabled) next.add(p.id);
+          else next.delete(p.id);
+          await saveState(path.join(this.dataDir, "auto-approve.json"), [
+            ...next,
+          ]);
+          this.autoApproveThreads = next;
+          this.broadcast({ type: "autoApprove", threads: [...next] });
+          for (const request of this.approvals.values())
+            this.autoApprove(request);
+          return { id: p.id, enabled: next.has(p.id) };
+        });
+      this.approvalSettingsWrite = change;
+      return change;
+    }
     if (
       [
         "notifications.status",
@@ -719,8 +770,13 @@ export class HostService extends EventEmitter {
       ].includes(method)
     )
       return this.features.handle(method, p, device);
-    if (this.features.supports(method))
-      return this.features.handle(method, p, device);
+    if (this.features.supports(method)) {
+      const result = await this.features.handle(method, p, device);
+      if (method === "host.preferences.update")
+        for (const request of this.approvals.values())
+          this.autoApprove(request);
+      return result;
+    }
     const lock = ["thread.send", "thread.steer"].includes(method)
       ? String(p.id)
       : undefined;
@@ -1014,6 +1070,8 @@ export class HostService extends EventEmitter {
       if (method === "thread.delete") {
         this.owned.delete(id);
         await this.saveOwned();
+        if (this.autoApproveThreads.has(id))
+          await this.handle("thread.autoApprove", { id, enabled: false });
       }
       await this.refreshThreads();
       return result;
@@ -1186,10 +1244,49 @@ export class HostService extends EventEmitter {
   private async saveOwned() {
     await saveState(path.join(this.dataDir, "threads.json"), [...this.owned]);
   }
+  private autoApprove(request: Approval): boolean {
+    const threadId = request.params?.threadId;
+    const turnId = request.params?.turnId;
+    if (
+      !this.codex.ready ||
+      this.features.preferences.defaultPermissions !== "full" ||
+      !this.owned.has(threadId) ||
+      !this.autoApproveThreads.has(threadId) ||
+      (turnId &&
+        (this.completedTurns.has(turnId) ||
+          (this.activeTurns.has(threadId) &&
+            this.activeTurns.get(threadId) !== turnId))) ||
+      this.approvals.get(request.id) !== request
+    )
+      return false;
+    const result = automaticApproval(request);
+    if (!result) return false;
+    try {
+      this.codex.respond(request.id, result);
+    } catch {
+      // A disconnected runtime leaves the request available for manual recovery.
+      return false;
+    }
+    this.approvals.delete(request.id);
+    const detail =
+      request.method === "item/commandExecution/requestApproval"
+        ? "Command automatically approved"
+        : request.method === "item/fileChange/requestApproval"
+          ? "File change automatically approved"
+          : "Permissions automatically approved";
+    this.record({ threadId, action: "auto-approved", detail });
+    this.setAgent(threadId, { action: "working", active: true, detail });
+    this.broadcast({
+      type: "approvals",
+      approvals: [...this.approvals.values()],
+    });
+    return true;
+  }
   snapshot(): Snapshot {
     return {
       capabilities: { apiVersion: 1, hostVersion: version },
       preferences: this.features.preferences,
+      autoApproveThreads: [...this.autoApproveThreads],
       graph: this.vault.graph,
       projects: this.allProjects(),
       limits: this.limits,

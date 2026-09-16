@@ -44,6 +44,14 @@ The same site works on Android and desktop browsers. Supporting browsers offer a
 
 ## Connection and device storage
 
+With Host 0.4.3-dev.3 or later, each chat has an **Auto-approve** toggle. Full access
+must be selected in Workspace settings, and the conversation must belong to
+AgentView. Enabling accepts supported command, file-change and permission requests
+for that chat even while your phone is away. Questions and sign-in flows still
+come to you. The choice is saved on Host; new chats start with it off. See
+[approval behavior](host-operation.md#permissions-and-computer-use) for its scope
+and recent activity record.
+
 The PWA uses the host's publicly trusted WSS endpoint, even on the same Wi-Fi.
 Browser JavaScript cannot implement native certificate pinning for AgentView's
 self-signed LAN certificate. It never disables certificate verification. Each
@@ -220,6 +228,14 @@ message counts, input-to-frame timing against an empty chat, expanded tools, his
 scrolling during streamed output in both browsers. Run it alone with
 `AGENTVIEW_PWA_PERFORMANCE_ONLY=1` and `npm run pwa:smoke`; it also runs in the full
 suite. Measurements describe the test computer, not physical iPhone performance.
+
+The full suite also exercises chat auto-approval through the encrypted Host API
+in Chromium and WebKit: pending approvals, command/file/permission responses,
+questions remaining manual, isolation, an absent client, reload, permission-mode
+pause and opt-out. `tests/auto-approve.test.ts` additionally verifies saved settings
+across Host replacement and concurrent client changes. The runtime requests in
+these checks are synthetic and never touch creator conversations.
+Set `AGENTVIEW_PWA_BROWSER=chromium` or `webkit` to repeat one browser's full suite.
 
 For a public-path check, install `cloudflared`, set `AGENTVIEW_PWA_URL` to the
 published HTTPS client and run `npm run pwa:remote-smoke`. This starts a temporary

@@ -120,6 +120,7 @@ export type Approval = {
   params: Record<string, any>;
 };
 export type Snapshot = {
+  autoApproveThreads?: string[];
   capabilities?: { apiVersion: number; hostVersion: string };
   preferences?: {
     defaultPermissions: "full" | "workspace" | "read-only";

@@ -74,6 +74,19 @@ items. The durable wrapper uses `requestId` as that identity; clients creating
 optimistic messages should use the same ID for both. A successful steer response
 confirms runtime acceptance, while the user-message event confirms input delivery.
 
+`thread.autoApprove` accepts `{ id, enabled }` and returns the saved choice.
+Enabling requires Full access and an AgentView-owned chat. Disabling is allowed
+even while the agent runtime is disconnected. The Host serializes concurrent
+changes and persists them before acknowledging. New snapshots include optional
+`autoApproveThreads: string[]`; its presence advertises support to clients.
+`autoApprove` events replace that list via `threads`. Older hosts omit the field
+and clients hide the control. Full access gates every automatic response;
+permission changes broadcast the ordinary `preferences` event. Automatic decisions
+appear as `activity` events with `action: "auto-approved"` and the exact `threadId`.
+The saved setting applies only to that conversation, without inheritance to forks
+or descendants. See [Host operation](host-operation.md#permissions-and-computer-use)
+for pause/resume, persistence and supported request types.
+
 `approval.respond` accepts `id` and `allow`. For a form-mode MCP elicitation, Allow
 also accepts `content`, an object matching `requestedSchema`; Host checks required
 fields, primitive types and choices. Decline needs no content. URL-mode acceptance

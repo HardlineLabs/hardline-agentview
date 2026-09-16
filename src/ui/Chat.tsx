@@ -325,6 +325,10 @@ function ApprovalCard({
   );
 }
 type Props = {
+  autoApproveSupported?: boolean;
+  autoApproveEnabled?: boolean;
+  fullAccess?: boolean;
+  approvalActivity?: { id: string; detail: string; time: number }[];
   expanded?: boolean;
   onboarding?: string;
   thread?: Thread;
@@ -361,6 +365,7 @@ export function Chat(props: Props) {
   const drafts = useRef(browser ? browserDrafts : new Map<string, string>());
   const [sending, setSending] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [approvalBusy, setApprovalBusy] = useState(false);
   const [confirmClear, setConfirmClear] = useState<"archive" | "delete">();
   const [sentNotice, setSentNotice] = useState("");
   const [steering, setSteering] = useState<
@@ -700,6 +705,47 @@ export function Chat(props: Props) {
       {props.thread && (
         <>
           <div className="chat-management">
+            {props.autoApproveSupported && (
+              <button
+                type="button"
+                className="auto-approve-toggle"
+                title={
+                  !props.thread.owned
+                    ? "Continue in AgentView to enable auto-approval."
+                    : !props.fullAccess
+                      ? "Requires Full access in Workspace settings."
+                      : "Automatically allow commands, file changes and permissions in this chat. Questions still come to you."
+                }
+                aria-pressed={Boolean(props.autoApproveEnabled)}
+                disabled={
+                  !props.connected ||
+                  approvalBusy ||
+                  (!props.autoApproveEnabled &&
+                    (!props.fullAccess || !props.thread.owned))
+                }
+                onClick={async () => {
+                  setApprovalBusy(true);
+                  try {
+                    await invoke("thread.autoApprove", {
+                      id: props.thread!.id,
+                      enabled: !props.autoApproveEnabled,
+                    });
+                  } catch (e: any) {
+                    props.onError(e.message);
+                  } finally {
+                    setApprovalBusy(false);
+                  }
+                }}
+              >
+                {approvalBusy
+                  ? "Saving…"
+                  : props.autoApproveEnabled
+                    ? props.fullAccess
+                      ? "Auto-approve on"
+                      : "Auto-approve paused"
+                    : "Auto-approve off"}
+              </button>
+            )}
             {props.expanded && (
               <>
                 <button
@@ -852,6 +898,24 @@ export function Chat(props: Props) {
               }
         }
       >
+        {Boolean(props.approvalActivity?.length) && (
+          <details className="auto-approve-history">
+            <summary>
+              Recent auto-approvals ({props.approvalActivity!.length})
+            </summary>
+            <ul>
+              {props.approvalActivity!.slice(0, 10).map((entry) => (
+                <li key={entry.id}>
+                  {entry.detail} ·{" "}
+                  {new Date(entry.time).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
         {props.loading && (!browser || !props.page) ? (
           <div className="chat-loading">
             <LoaderCircle className="spin" size={18} /> Opening conversation

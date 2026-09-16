@@ -47,7 +47,8 @@ computer. This sets Codex's full filesystem/network sandbox policy and `on-reque
 approval policy for new conversations and each new turn, including resumed chats.
 Routine work can run outside the workspace; actions requiring approval can reach
 the configured Codex reviewer instead of being denied because prompts are disabled.
-AgentView does not automatically accept approvals. Full access does not override
+Approval remains manual unless you enable **Auto-approve** in an individual chat.
+Full access does not override
 explicit forbidden rules or managed restrictions. Before Host 0.4.2-dev.3, Full
 access forced `never`; changing Codex's global approval setting or restarting its
 runtime did not remove that Host override. Updating Host applies the correction
@@ -55,6 +56,25 @@ on the next new turn without restarting the execution worker.
 Changing the default does not alter a turn already running. Workspace and Read
 only modes remain available. Organization requirements and individual connected
 apps can impose their own restrictions.
+
+Host 0.4.3-dev.3 adds **Auto-approve off/on** inside each chat. With Full access
+selected, enable it in an AgentView-owned conversation to automatically accept
+supported command, file-change and filesystem/network permission requests,
+including requests already waiting in that chat. The Host saves the choice per
+conversation; it continues with no phone connected and survives Host replacement.
+Other chats, new chats, forks and subagent chats keep their own manual default.
+Turning it off restores manual approval once Host acknowledges the change; it
+cannot undo work already accepted. Archive/restore retains the setting; deletion
+removes it. Workspace and Read only pause automation, and returning to Full access
+resumes it, including eligible waiting requests. This never changes a running
+turn's sandbox or grants permanent command rules.
+
+Questions, MCP forms and sign-in flows still require user input. Unknown requests
+and requests whose available decisions exclude acceptance also stay manual.
+**Recent auto-approvals** shows up to ten decisions for the chat from the Host's
+bounded in-memory activity history; it is not a permanent audit log. Install the
+Host update and reload the PWA to get the control. The execution worker does not
+need a restart, and existing chats remain manual until explicitly enabled.
 
 Host 0.4.3-dev.1 also corrects MCP permission prompts: Allow submits acceptance
 and the requested form values, while Decline submits refusal. Earlier versions
