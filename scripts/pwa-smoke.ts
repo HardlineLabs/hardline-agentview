@@ -515,7 +515,21 @@ try {
     page.setDefaultTimeout(15_000);
     await installViewportFixture(page);
     const errors: string[] = [];
-    page.on("pageerror", (error) => errors.push(error.message));
+    page.on("pageerror", (error) => {
+      errors.push(error.message);
+      console.error(`${engine.name()} page error at ${page.url()}:`, error);
+      void page
+        .evaluate(() => ({
+          online: navigator.onLine,
+          state: document.readyState,
+        }))
+        .then((state) => console.error("Browser error state", state))
+        .catch(() => {});
+    });
+    page.on("requestfailed", (request) => {
+      if (new URL(request.url()).pathname === "/sw.js")
+        console.error("Worker request failure", request.failure());
+    });
     try {
       const blocked = await context.newPage();
       await blocked.addInitScript(() => {
