@@ -1,6 +1,6 @@
 {
   "name": "hardline-agentview",
-  "version": "0.4.4-dev.1",
+  "version": "0.4.4-dev.2",
   "description": "A living workspace for human and agent collaboration",
   "private": true,
   "type": "module",
@@ -16,6 +16,9 @@
     "client": "electron . --role=client",
     "package": "npm run build && node scripts/package.mjs",
     "package:host": "npm run build && node scripts/package.mjs --host-only",
+    "package:client": "npm run build && node scripts/package.mjs --client-only",
+    "ui:bundle": "npm run build && tsx scripts/build-ui-update.ts",
+    "ui:smoke": "tsx scripts/ui-update-smoke.ts",
     "smoke": "node scripts/smoke.mjs",
     "pwa:dev": "vite --mode pwa --host 127.0.0.1",
     "pwa:build": "tsc --noEmit && node scripts/build-pwa.mjs",

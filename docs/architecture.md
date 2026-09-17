@@ -33,6 +33,12 @@ The native main process retains credentials and transport. Reloading its rendere
 requests a fresh Host snapshot without interrupting running work. Windows notices
 are opt-in and require the client to remain open; web push uses its service worker.
 
+The Windows Client can replace its renderer with a signed compatible UI bundle.
+The native shell owns downloads, verification, active-version selection and startup
+rollback; it always retains the bundled fallback. The Host uses only its packaged
+interface. [Desktop UI updates](desktop-ui-updates.md) owns the format, publication,
+compatibility and recovery workflow.
+
 ## Connection
 
 The default LAN listener is TLS on TCP 43120. Clients prefer the paired LAN host

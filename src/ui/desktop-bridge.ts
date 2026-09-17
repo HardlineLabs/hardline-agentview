@@ -5,7 +5,19 @@ import {
   setClientPersistence,
   recoverRequests,
   requestWithReceipt,
+  assertClientReadyForUpdate,
+  saveDrafts,
 } from "./client-state";
+
+let pendingRequests = 0;
+export async function prepareDesktopUpdate() {
+  assertClientReadyForUpdate();
+  if (pendingRequests)
+    throw new Error(
+      "A workspace request is still finishing. Try Update UI again in a moment.",
+    );
+  await saveDrafts();
+}
 
 // Native transport stays in Electron; the renderer shares the same durable
 // drafts and receipt protocol as the web client, without receiving credentials.
@@ -36,32 +48,42 @@ export function desktopBridge(native: DesktopBridge): DesktopBridge {
       return () => listeners.delete(callback);
     },
     async invoke(method, params = {}) {
-      if (method === "connection.load") {
-        return (loading ||= (async () => {
+      pendingRequests++;
+      try {
+        if (method === "connection.load") {
+          return await (loading ||= (async () => {
+            const result = await native.invoke(method, params);
+            const selectedThread = restoreClientState(
+              result.hostId || "",
+              result.clientState,
+            );
+            ready = true;
+            supported ||= Boolean(result.snapshot?.capabilities?.apiVersion);
+            if (supported) void recoverRequests(native.invoke, emit);
+            return { ...result, selectedThread };
+          })());
+        }
+        if (
+          method === "connection.connect" ||
+          method === "connection.disconnect"
+        ) {
+          ready = false;
+          await clearClientState();
           const result = await native.invoke(method, params);
-          const selectedThread = restoreClientState(
-            result.hostId || "",
-            result.clientState,
-          );
+          restoreClientState(result.hostId || "");
           ready = true;
-          supported ||= Boolean(result.snapshot?.capabilities?.apiVersion);
-          if (supported) void recoverRequests(native.invoke, emit);
-          return { ...result, selectedThread };
-        })());
+          loading = undefined;
+          return result;
+        }
+        return await requestWithReceipt(
+          native.invoke,
+          method,
+          params,
+          supported,
+        );
+      } finally {
+        pendingRequests--;
       }
-      if (
-        method === "connection.connect" ||
-        method === "connection.disconnect"
-      ) {
-        ready = false;
-        await clearClientState();
-        const result = await native.invoke(method, params);
-        restoreClientState(result.hostId || "");
-        ready = true;
-        loading = undefined;
-        return result;
-      }
-      return requestWithReceipt(native.invoke, method, params, supported);
     },
   };
 }

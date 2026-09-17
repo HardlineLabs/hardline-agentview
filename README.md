@@ -43,6 +43,11 @@ the capability contract for future client interfaces.
 
 ## On Windows
 
+The development client includes **Update UI** in its title bar. It downloads a
+verified desktop interface and reloads after saving drafts, while Host work keeps
+running. Native changes still need a new executable. See
+[desktop UI updates](docs/desktop-ui-updates.md) for publishing, compatibility and recovery.
+
 Version 0.4.3 brings the PWA's expanded workspace to the Windows client: saved
 permission defaults and onboarding, chat rename and bulk actions, attachments,
 workspace files, queued follow-ups, recovery and an inbox. Pair with either a

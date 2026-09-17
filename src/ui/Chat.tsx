@@ -582,6 +582,7 @@ export function Chat(props: Props) {
   };
   const upload = async (files: FileList | null) => {
     if (!files) return;
+    const finishPreparation = beginAttachmentPreparation();
     setUploading(true);
     const key = props.thread?.id || "new";
     try {
@@ -648,6 +649,7 @@ export function Chat(props: Props) {
     } catch (e: any) {
       props.onError(e.message);
     } finally {
+      finishPreparation();
       setUploading(false);
       if (fileInput.current) fileInput.current.value = "";
     }
@@ -1229,3 +1231,4 @@ export function Chat(props: Props) {
     </aside>
   );
 }
+import { beginAttachmentPreparation } from "./client-state";
