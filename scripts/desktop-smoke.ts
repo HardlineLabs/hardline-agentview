@@ -61,6 +61,28 @@ try {
     .filter({ hasText: "Desktop owned conversation" })
     .click();
   await page.getByLabel("Message your agent").waitFor();
+  for (const [label, option] of [
+    ["Model", "Test agent"],
+    ["Reasoning effort", "low"],
+  ]) {
+    const trigger = page.getByRole("button", { name: label, exact: true });
+    await trigger.click();
+    const dialog = page.getByRole("dialog", {
+      name: `Choose ${label.toLowerCase()}`,
+    });
+    await dialog.waitFor();
+    await dialog.getByRole("option", { name: option, exact: true }).click();
+    await dialog.waitFor({ state: "hidden" });
+    assert.equal(await trigger.innerText(), option);
+    await trigger.click();
+    await dialog.waitFor();
+    await page.keyboard.press("Escape");
+    await dialog.waitFor({ state: "hidden" });
+    assert.ok(
+      await trigger.evaluate((element) => element === document.activeElement),
+    );
+    assert.ok(await page.getByLabel("Message your agent").isVisible());
+  }
   await page.getByTitle("Attach files or images").waitFor();
   await page
     .getByRole("button", { name: "Auto-approve off", exact: true })
@@ -133,6 +155,7 @@ try {
     "Desktop parity: native TLS pairing, encrypted draft/attachment restart, send, approvals, tools, notifications, host isolation and layout passed.",
   );
 } catch (error) {
+  console.error("Renderer errors:", errors);
   console.error(page! ? await page.locator("body").innerText() : error);
   throw error;
 } finally {
