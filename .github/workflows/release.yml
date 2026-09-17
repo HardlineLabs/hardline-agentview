@@ -1,0 +1,86 @@
+name: Stage release downloads
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful Product checks run containing windows-desktop
+        required: true
+        type: string
+      tag:
+        description: Existing draft release tag (for example v0.4.3)
+        required: true
+        type: string
+permissions:
+  actions: read
+  contents: write
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify tested source and draft release
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.run_id }}
+          TAG: ${{ inputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RUN_ID" =~ ^[0-9]+$ ]]
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          run=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID")
+          test "$(jq -r .conclusion <<< "$run")" = success
+          test "$(jq -r .path <<< "$run")" = .github/workflows/check.yml
+          sha=$(jq -r .head_sha <<< "$run")
+          draft=$(gh release view "$TAG" --json isDraft,targetCommitish)
+          test "$(jq -r .isDraft <<< "$draft")" = true
+          target=$(jq -r .targetCommitish <<< "$draft")
+          git fetch origin "$sha" "$target"
+          test "$(git rev-parse "$sha^{tree}")" = "$(git rev-parse "$target^{tree}")"
+          test "$(git show "$sha:package.json" | jq -r .version)" = "${TAG#v}"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - name: Retain release assembly tool
+        run: cp scripts/release-assets.py "$RUNNER_TEMP/release-assets.py"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.source.outputs.sha }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-desktop
+          path: out
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run pwa:build
+      - run: python "$RUNNER_TEMP/release-assets.py"
+      - name: Upload and verify draft assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="artifacts/release-${TAG#v}"
+          for asset in "$root"/*; do
+            gh release upload "$TAG" "$asset" --clobber
+          done
+          gh release view "$TAG" --json assets > "$RUNNER_TEMP/assets.json"
+          python - "$root" "$RUNNER_TEMP/assets.json" <<'PY'
+          import hashlib, json, sys
+          from pathlib import Path
+          assets = {a['name']: a for a in json.loads(Path(sys.argv[2]).read_text())['assets']}
+          for file in Path(sys.argv[1]).iterdir():
+              with file.open('rb') as stream:
+                  digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+              assert assets[file.name]['digest'] == 'sha256:' + digest, file.name
+              assert assets[file.name]['size'] == file.stat().st_size, file.name
+              print('Verified', file.name)
+          PY
+          echo "Tested source: ${{ steps.source.outputs.sha }}; draft assets verified. Publish explicitly after review." >> "$GITHUB_STEP_SUMMARY"
