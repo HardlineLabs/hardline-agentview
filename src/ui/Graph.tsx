@@ -14,9 +14,15 @@ import {
   forceY,
   type SimulationNodeDatum,
 } from "d3-force";
-import type { Graph as GraphData, Note, Agent } from "../shared/types";
+import type {
+  Graph as GraphData,
+  Note,
+  Agent,
+  Activity,
+} from "../shared/types";
 import { colors } from "./api";
 import { moveToward } from "./motion";
+import { activeTargets } from "./activity-targets";
 type Node = Note &
   SimulationNodeDatum & {
     radius: number;
@@ -39,6 +45,8 @@ export type GraphControls = {
 type Props = {
   graph: GraphData;
   agents: Agent[];
+  activity: Activity[];
+  desktop: boolean;
   selected?: string;
   query: string;
   domain?: string;
@@ -234,6 +242,8 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
       invalidate.current();
     }, [
       props.agents,
+      props.activity,
+      props.desktop,
       props.selected,
       props.query,
       props.domain,
@@ -574,16 +584,23 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
               b = map.get(l.target);
             if (!a || !b) continue;
             const lit = l.source === focus || l.target === focus;
-            ctx.strokeStyle = lit
-              ? "rgba(139,219,196,.42)"
-              : isMatch(a) && isMatch(b)
-                ? "rgba(133,163,177,.115)"
-                : "rgba(133,163,177,.025)";
-            ctx.lineWidth = (lit ? 1.2 : 0.7) / v.scale;
+            const connectionColor =
+              colors[a.domain] || colors[b.domain] || colors.knowledge;
+            ctx.strokeStyle = p.desktop
+              ? connectionColor + (lit ? "d8" : isMatch(a) && isMatch(b) ? "62" : "2e")
+              : lit
+                ? "rgba(139,219,196,.42)"
+                : isMatch(a) && isMatch(b)
+                  ? "rgba(133,163,177,.115)"
+                  : "rgba(133,163,177,.025)";
+            ctx.lineWidth = (lit ? 1.35 : p.desktop ? 0.9 : 0.7) / v.scale;
+            ctx.shadowColor = connectionColor;
+            ctx.shadowBlur = p.desktop ? (lit ? 18 : 8) / v.scale : 0;
             ctx.beginPath();
             ctx.moveTo(a.x!, a.y!);
             ctx.lineTo(b.x!, b.y!);
             ctx.stroke();
+            ctx.shadowBlur = 0;
           }
           const labelBoxes: {
             x: number;
@@ -618,10 +635,13 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
               ctx.arc(x, y, n.radius + changed / 180, 0, Math.PI * 2);
               ctx.stroke();
             }
-            ctx.fillStyle = color + (selected ? "e6" : "a6");
+            ctx.fillStyle = color + (selected ? "f2" : p.desktop ? "d4" : "a6");
+            ctx.shadowColor = color;
+            ctx.shadowBlur = p.desktop ? (selected ? 28 : 17) / v.scale : 0;
             ctx.beginPath();
             ctx.arc(x, y, n.radius, 0, Math.PI * 2);
             ctx.fill();
+            ctx.shadowBlur = 0;
             if (p.labels || selected || neighbors.has(n.id) || p.query) {
               const major = n.kind === "entry" || n.kind === "hub";
               ctx.font = `${selected || major ? "500" : "400"} ${major ? 12 : 10.5}px "DM Sans", "Segoe UI", sans-serif`;
@@ -694,7 +714,7 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
           ctx.fillStyle = "#0b131a";
           ctx.strokeStyle = station.color + (busy.length ? "cc" : "45");
           ctx.shadowColor = station.color;
-          ctx.shadowBlur = 0;
+          ctx.shadowBlur = p.desktop && busy.length ? 16 / v.scale : 0;
           ctx.lineWidth = 1.3;
           ctx.beginPath();
           ctx.arc(0, 0, 13, 0, Math.PI * 2);
@@ -727,14 +747,22 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
           const color = a.parentId ? "#c4acff" : "#b3ffe1";
           const radius = a.parentId ? 5 : 7;
           ctx.shadowColor = color;
-          ctx.shadowBlur = 0;
+          ctx.shadowBlur = p.desktop ? 18 / v.scale : 0;
           ctx.fillStyle = color;
           ctx.beginPath();
           ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
           ctx.fill();
           ctx.shadowBlur = 0;
           if (a.active) {
-            const targetId = a.target || stationFor(a).id;
+            const noteTargets = p.desktop
+              ? activeTargets(a, p.activity, new Set(map.keys()), now)
+              : a.target && map.has(a.target)
+                ? [a.target]
+                : [];
+            const targetIds = noteTargets.length
+              ? noteTargets
+              : [stationFor(a).id];
+            const targetId = targetIds.join("|");
             let connection = connections.get(a.id);
             if (!connection || connection.target !== targetId) {
               connection = { target: targetId, progress: 0 };
@@ -745,34 +773,43 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
               connection.progress + seconds / 0.45,
             );
             const reach = p.motion ? 1 - (1 - connection.progress) ** 3 : 1;
-            const end = {
-              x: pos.x + (target.x! - pos.x) * reach,
-              y: pos.y + (target.y! - pos.y) * reach,
-            };
-            ctx.shadowBlur = 0;
-            ctx.strokeStyle = color + "e0";
-            ctx.lineWidth = 1.5 / v.scale;
-            ctx.beginPath();
-            ctx.moveTo(pos.x, pos.y);
-            ctx.lineTo(end.x, end.y);
-            ctx.setLineDash([7 / v.scale, 9 / v.scale]);
-            ctx.lineDashOffset = (-t * 24) / v.scale;
-            ctx.stroke();
-            ctx.setLineDash([]);
-            ctx.lineDashOffset = 0;
-            for (let packet = 0; packet < 3; packet++) {
-              const progress = (t * 0.45 + packet / 3) % 1;
-              ctx.fillStyle = "#eafff5";
+            targetIds.forEach((id, targetIndex) => {
+              const connectionTarget = map.get(id) || stationFor(a);
+              const end = {
+                x: pos.x + (connectionTarget.x! - pos.x) * reach,
+                y: pos.y + (connectionTarget.y! - pos.y) * reach,
+              };
+              const targetColor =
+                "domain" in connectionTarget
+                  ? colors[connectionTarget.domain] || color
+                  : connectionTarget.color;
+              ctx.shadowColor = targetColor;
+              ctx.shadowBlur = p.desktop ? 10 / v.scale : 0;
+              ctx.strokeStyle = targetColor + "e0";
+              ctx.lineWidth = 1.5 / v.scale;
               ctx.beginPath();
-              ctx.arc(
-                pos.x + (end.x - pos.x) * progress,
-                pos.y + (end.y - pos.y) * progress,
-                2 / v.scale,
-                0,
-                Math.PI * 2,
-              );
-              ctx.fill();
-            }
+              ctx.moveTo(pos.x, pos.y);
+              ctx.lineTo(end.x, end.y);
+              ctx.setLineDash([7 / v.scale, 9 / v.scale]);
+              ctx.lineDashOffset = (-t * 24 - targetIndex * 5) / v.scale;
+              ctx.stroke();
+              ctx.setLineDash([]);
+              ctx.lineDashOffset = 0;
+              ctx.shadowBlur = 0;
+              for (let packet = 0; packet < 3; packet++) {
+                const progress = (t * 0.45 + packet / 3 + targetIndex * 0.11) % 1;
+                ctx.fillStyle = "#f3ffff";
+                ctx.beginPath();
+                ctx.arc(
+                  pos.x + (end.x - pos.x) * progress,
+                  pos.y + (end.y - pos.y) * progress,
+                  2 / v.scale,
+                  0,
+                  Math.PI * 2,
+                );
+                ctx.fill();
+              }
+            });
           }
           ctx.font = '500 10px "DM Sans", "Segoe UI", sans-serif';
           ctx.fillStyle = color;

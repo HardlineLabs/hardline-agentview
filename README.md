@@ -64,7 +64,9 @@ Native title-bar controls and automatic LAN-to-remote fallback remain available.
 Drag notes to play with the network, scroll to zoom, and double-click to fit.
 Select a note to read it or bring it into a conversation. **Ctrl+K** finds notes
 and conversations. Graph settings control labels and gentle motion; you can hide
-the chat panel for a full-width brain.
+the chat panel for a full-width brain. The Windows brain uses neon domain colors
+and can keep an active agent connected to several recently referenced notes. Drag
+the divider beside the chat panel to give the brain or conversation more room.
 
 Existing desktop conversations appear in the explorer. Continuing one creates
 an AgentView branch with its history. Conversations created in AgentView continue

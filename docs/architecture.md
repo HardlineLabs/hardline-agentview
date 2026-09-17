@@ -146,6 +146,16 @@ Gentle-motion settings pause decorative motion; actual
 agent travel remains visible. Smoothness ultimately depends on monitor, GPU and
 OS compositor performance.
 
+The Windows graph uses the note-domain palette for luminous nodes and links over
+its black brain surface. While an agent remains active, its current target and up
+to six distinct note targets observed for that thread in the preceding 90 seconds
+remain connected; older, unknown and unrelated targets are excluded. This is a
+bounded presentation of observed activity, not a claim about private reasoning or
+simultaneous filesystem access. The Windows conversation panel can be resized from
+300 to 720 pixels by dragging its divider or using the divider's arrow-key control;
+the available brain width can lower the effective maximum. These treatments are
+desktop-only and do not alter PWA rendering or layout.
+
 The PWA renders subdued flat nodes and reuses the settled note network as a raster
 while live agents animate above it. Hidden and idle views stop drawing; metadata
 refreshes retain layout. The browser [rendering guide](pwa.md#rendering-and-battery-use)
