@@ -33,6 +33,7 @@ import remarkGfm from "remark-gfm";
 import { invoke } from "./api";
 import {
   drafts as clientDrafts,
+  beginAttachmentPreparation,
   attachments as attachmentsState,
   saveDrafts,
   type Attachment,
@@ -1231,4 +1232,3 @@ export function Chat(props: Props) {
     </aside>
   );
 }
-import { beginAttachmentPreparation } from "./client-state";
