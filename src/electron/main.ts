@@ -9,12 +9,17 @@ import {
   Menu,
   safeStorage,
   shell,
+  Notification,
 } from "electron";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { HostService, decodeConnection } from "../host/service";
 import { encodeConnection, remoteAddress } from "../shared/pairing";
+import { PrivateState } from "./private-state";
+import { claimPairingCode, sixDigitCode } from "../shared/pairing-code";
+import type { ClientState } from "../ui/client-state";
+import { randomUUID } from "node:crypto";
 import { ClientConnection } from "./connection";
 import { enableNetworkAccess, networkAccessEnabled } from "./firewall";
 import type { HostSettings, AppEvent, HostStatus } from "../shared/types";
@@ -48,6 +53,9 @@ if (!app.requestSingleInstanceLock()) {
   let cleaningUp = false;
   let changing = false;
   let windowNeedsRecovery = false;
+  const privateState = new PrivateState(dataDir);
+  let clientHostId = "";
+  let notificationsEnabled = false;
   const remember = async (config: import("../shared/types").Connection) => {
     if (!safeStorage.isEncryptionAvailable())
       throw new Error("Windows secure storage is unavailable.");
@@ -64,6 +72,21 @@ if (!app.requestSingleInstanceLock()) {
     autoStart: false,
   };
   const emit = (event: AppEvent) => {
+    if (
+      role === "client" &&
+      event.type === "notice" &&
+      notificationsEnabled &&
+      Notification.isSupported()
+    ) {
+      const notification = new Notification({
+        title: "AgentView",
+        body: event.notice.title,
+      });
+      notification.on("click", () => {
+        showWindow();
+      });
+      notification.show();
+    }
     if (window && !window.isDestroyed())
       window.webContents.send("agentview:event", event);
   };
@@ -319,11 +342,28 @@ if (!app.requestSingleInstanceLock()) {
         }
         throw new Error("Unknown host action.");
       }
+      if (method === "client.state.save") {
+        if (!clientHostId || params.state?.hostId !== clientHostId) return {};
+        await privateState.save("drafts", params.state);
+        return {};
+      }
+      if (method === "notifications.desktop") {
+        if (!Notification.isSupported())
+          throw new Error("Windows notifications are unavailable.");
+        notificationsEnabled = Boolean(params.enabled);
+        await privateState.save("notifications", notificationsEnabled);
+        return {};
+      }
       if (method === "connection.load") {
+        notificationsEnabled =
+          (await privateState.load<boolean>("notifications")) || false;
+        const clientState = await privateState.load<ClientState>("drafts");
         if (client.connected && client.snapshot)
           return {
             connected: true,
-            snapshot: client.snapshot,
+            hostId: clientHostId,
+            clientState,
+            snapshot: await client.request("snapshot"),
             route: client.route,
           };
         try {
@@ -334,8 +374,9 @@ if (!app.requestSingleInstanceLock()) {
             const config = decodeConnection(
               safeStorage.decryptString(encrypted),
             );
+            clientHostId = config.hostId;
             client.connect(config);
-            return { connecting: true };
+            return { connecting: true, hostId: clientHostId, clientState };
           }
         } catch {
           /* First connection. */
@@ -343,12 +384,30 @@ if (!app.requestSingleInstanceLock()) {
         return {};
       }
       if (method === "connection.connect") {
-        const config = decodeConnection(params.code);
+        if (!safeStorage.isEncryptionAvailable())
+          throw new Error("Windows secure storage is unavailable.");
+        const digits = sixDigitCode(String(params.code || ""));
+        const previous = digits
+          ? await privateState.load<{ code: string; claimId: string }>(
+              "pairing",
+            )
+          : undefined;
+        const claimId =
+          previous && previous.code === digits
+            ? previous.claimId
+            : randomUUID();
+        if (digits)
+          await privateState.save("pairing", { code: digits, claimId });
+        const config = digits
+          ? await claimPairingCode(digits, claimId)
+          : decodeConnection(params.code);
         config.routePreference = ["auto", "local", "remote"].includes(
           params.routePreference,
         )
           ? params.routePreference
           : "auto";
+        // Short codes deliberately omit the LAN route and must use remote TLS.
+        if (digits) config.routePreference = "remote";
         if (params.address?.trim()) {
           const address = params.address.trim();
           config.address = address.startsWith("wss://")
@@ -358,13 +417,20 @@ if (!app.requestSingleInstanceLock()) {
           if (url.protocol !== "wss:")
             throw new Error("Use a host address with wss://.");
         }
+        clientHostId = "";
+        await privateState.save("drafts", null);
+        await fs.rm(path.join(dataDir, "connection.bin"), { force: true });
+        clientHostId = config.hostId;
         client.connect(config);
         // Invitations are replaced by a device credential only after the host proves its identity.
         if (config.kind === "device") await remember(config);
-        return {};
+        return { hostId: clientHostId };
       }
       if (method === "connection.disconnect") {
         client.disconnect();
+        clientHostId = "";
+        await privateState.save("drafts", null);
+        await privateState.save("pairing", null);
         await fs.rm(path.join(dataDir, "connection.bin"), { force: true });
         emit({ type: "connection", state: "disconnected" });
         return {};

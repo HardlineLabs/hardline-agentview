@@ -1,3 +1,4 @@
+import { makeClientHost } from "./client-fixture";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
@@ -6,6 +7,10 @@ import path from "node:path";
 import { chromium, webkit, devices, type Page } from "playwright";
 import QRCode from "qrcode";
 import { graphStationSmoke } from "./pwa-graph-smoke";
+import { chatRecoverySmoke, historyOrderSmoke } from "./pwa-chat-smoke";
+import { longConversationSmoke } from "./pwa-performance-smoke";
+import { energySmoke } from "./pwa-energy-smoke";
+import { autoApproveSmoke } from "./pwa-auto-approve-smoke";
 import { DatabaseSync } from "node:sqlite";
 import { randomInt, randomBytes } from "node:crypto";
 import { PairingRegistry, type Sql } from "../src/pairing/registry";
@@ -20,6 +25,9 @@ import {
 // runtime is a deterministic fixture. Never uses the developer's vault/account.
 const temporary = await mkdtemp(path.join(os.tmpdir(), "agentview-pwa-"));
 const captures = process.env.AGENTVIEW_PWA_CAPTURES;
+const clientRoot = path.resolve(
+  process.env.AGENTVIEW_PWA_BUILD || "dist/client",
+);
 if (captures) await mkdir(captures, { recursive: true });
 const hosts: HostService[] = [];
 let updateVersion = false;
@@ -65,10 +73,10 @@ const server = createServer(async (req, res) => {
     return;
   }
   const file = path.resolve(
-    "dist/client",
+    clientRoot,
     "." + (url.pathname === "/" ? "/index.html" : url.pathname),
   );
-  if (!file.startsWith(path.resolve("dist/client") + path.sep)) {
+  if (!file.startsWith(clientRoot + path.sep)) {
     res.writeHead(403).end();
     return;
   }
@@ -94,172 +102,7 @@ await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
 const address = server.address() as { port: number };
 const url = `http://127.0.0.1:${address.port}/`;
 async function makeHost(name: string) {
-  const root = path.join(temporary, name);
-  const vault = path.join(root, "vault");
-  await mkdir(vault, { recursive: true });
-  await writeFile(
-    path.join(vault, "Home.md"),
-    `---\ntype: guide\ndomain: company\nstatus: current\n---\n# ${name} workspace\n\n[[Ideas]]\n`,
-  );
-  await writeFile(
-    path.join(vault, "Ideas.md"),
-    `---\ntype: reference\ndomain: agentview\nstatus: current\n---\n# ${name} ideas\n\nA private note for ${name}.\n`,
-  );
-  await writeFile(
-    path.join(vault, "Large.md"),
-    "# Large note\n" + "Workspace content. ".repeat(35000),
-  );
-  const host = new HostService(
-    { vaultPath: vault, port: 0, codexPath: "", autoStart: false },
-    path.join(root, "host"),
-  );
-  const thread = {
-    id: `${name}-thread`,
-    name: `${name} conversation`,
-    preview: "Plan a small useful project",
-    cwd: vault,
-    updatedAt: Date.now() / 1000,
-    createdAt: Date.now() / 1000,
-    status: { type: "idle" },
-  };
-  const fixtureThreads = new Map<string, any>([[thread.id, thread]]);
-  const fixtureTurns = new Map<string, any[]>();
-  host.codex.start = async () => {
-    host.codex.ready = true;
-  };
-  host.codex.rpc = async (method: string, params: any) => {
-    if (method === "model/list")
-      return {
-        data: [
-          {
-            id: "fixture",
-            model: "fixture",
-            displayName: "Test agent",
-            isDefault: true,
-            supportedReasoningEfforts: [
-              { reasoningEffort: "high", description: "High" },
-              { reasoningEffort: "low", description: "Low" },
-            ],
-          },
-        ],
-      };
-    if (method === "thread/list")
-      return {
-        data: [...fixtureThreads.values()].filter(
-          (t) => Boolean(t.archived) === Boolean(params?.archived),
-        ),
-      };
-    if (method === "thread/start") {
-      const created = {
-        ...thread,
-        id: crypto.randomUUID(),
-        name: "New fixture",
-        preview: "",
-        ephemeral: false,
-      };
-      fixtureThreads.set(created.id, created);
-      fixtureTurns.set(created.id, []);
-      return { thread: created };
-    }
-    if (method === "thread/name/set") {
-      fixtureThreads.get(params.threadId).name = params.name;
-      return {};
-    }
-    if (method === "thread/archive" || method === "thread/unarchive") {
-      fixtureThreads.get(params.threadId).archived =
-        method === "thread/archive";
-      return {};
-    }
-    if (method === "thread/delete") {
-      fixtureThreads.delete(params.threadId);
-      return {};
-    }
-    if (method === "turn/start") {
-      const turn = {
-        id: crypto.randomUUID(),
-        status: "inProgress",
-        items: [
-          {
-            id: crypto.randomUUID(),
-            type: "userMessage",
-            content: params.input,
-          },
-        ],
-      };
-      fixtureTurns.set(params.threadId, [
-        ...(fixtureTurns.get(params.threadId) || []),
-        turn,
-      ]);
-      setTimeout(() => {
-        turn.status = "completed";
-        (turn.items as any[]).push({
-          id: crypto.randomUUID(),
-          type: "agentMessage",
-          text: params.input.some((i: any) => i.type === "localImage")
-            ? "Image received by the host runtime."
-            : "Onboarding received by the host runtime.",
-        });
-        host.codex.emit("notification", {
-          method: "turn/completed",
-          params: { threadId: params.threadId, turn },
-        });
-      }, 150);
-      return { turn };
-    }
-    if (method === "thread/read") {
-      if (readDelay)
-        await new Promise((resolve) => setTimeout(resolve, readDelay));
-      return { thread: fixtureThreads.get(params.threadId) };
-    }
-    if (method === "thread/turns/list" && fixtureTurns.has(params.threadId))
-      return {
-        data: [...fixtureTurns.get(params.threadId)!].reverse(),
-        nextCursor: null,
-      };
-    if (method === "thread/turns/list")
-      return {
-        data: [
-          {
-            id: "turn-1",
-            status: "completed",
-            items: [
-              {
-                id: "message-1",
-                type: "agentMessage",
-                text: `Welcome to ${name}. Your workspace stays on this computer.`,
-              },
-              {
-                id: "long-message",
-                type: "agentMessage",
-                text:
-                  Array.from(
-                    { length: 35 },
-                    (_, i) =>
-                      `Paragraph ${i + 1}. A long conversation should scroll only inside the message panel.`,
-                  ).join("\n\n") +
-                  "\n\n```text\n" +
-                  "wide-output-".repeat(100) +
-                  "\n```",
-              },
-            ],
-          },
-        ],
-        nextCursor: null,
-      };
-    if (method === "account/rateLimits/read")
-      return {
-        rateLimits: {
-          primary: {
-            usedPercent: 12,
-            windowDurationMins: 300,
-            resetsAt: Date.now() / 1000 + 7200,
-          },
-        },
-      };
-    return { data: [] };
-  };
-  await host.start();
-  host.settings.remoteAddress = `wss://127.0.0.1:${host.settings.port}/`;
+  const host = await makeClientHost(temporary, name, () => readDelay);
   hosts.push(host);
   return host;
 }
@@ -378,9 +221,52 @@ async function expandedWorkspace(page: Page, engine: string) {
       await page.locator(".approval-card").waitFor({ state: "detached" });
       assert.deepEqual(decisions[index], { decision });
     }
+    for (const allow of [false, true]) {
+      first.codex.emit("request", {
+        id: `${engine}-mcp-${allow}`,
+        method: "mcpServer/elicitation/request",
+        params: {
+          threadId: approvalThread.id,
+          mode: "form",
+          message: "Allow browser access for this task?",
+          requestedSchema: {
+            type: "object",
+            required: ["scope"],
+            properties: {
+              scope: {
+                type: "string",
+                title: "Access scope",
+                oneOf: [
+                  { const: "once", title: "This action" },
+                  { const: "session", title: "This chat" },
+                ],
+              },
+            },
+          },
+        },
+      });
+      const card = page.locator(".approval-card");
+      await card
+        .getByText("Allow browser access for this task?", { exact: true })
+        .waitFor();
+      if (allow) {
+        await page.reload();
+        await card.getByLabel("Access scope").selectOption("once");
+      }
+      await card
+        .getByRole("button", { name: allow ? "Allow" : "Decline", exact: true })
+        .click();
+      await card.waitFor({ state: "detached" });
+      assert.deepEqual(decisions.at(-1), {
+        action: allow ? "accept" : "decline",
+        content: allow ? { scope: "once" } : null,
+        _meta: null,
+      });
+    }
   } finally {
     first.codex.respond = originalRespond;
   }
+  await autoApproveSmoke(page, first, approvalThread.id);
   await page.getByRole("button", { name: "Recovery", exact: true }).click();
   await page.getByText("Saved in the host runtime", { exact: true }).waitFor();
   await page
@@ -444,6 +330,11 @@ async function expandedWorkspace(page: Page, engine: string) {
 }
 try {
   for (const engine of [chromium, webkit]) {
+    if (
+      process.env.AGENTVIEW_PWA_BROWSER &&
+      process.env.AGENTVIEW_PWA_BROWSER !== engine.name()
+    )
+      continue;
     const browser = await engine.launch();
     // The exemption applies only to these ephemeral local fixture certificates.
     // Production/public-path tests must use normal certificate validation.
@@ -458,7 +349,10 @@ try {
     page.setDefaultTimeout(15_000);
     await installViewportFixture(page);
     const errors: string[] = [];
-    page.on("pageerror", (error) => errors.push(error.message));
+    page.on("pageerror", (error) => {
+      errors.push(error.message);
+      console.error(`${engine.name()} page error at ${page.url()}:`, error);
+    });
     try {
       const blocked = await context.newPage();
       await blocked.addInitScript(() => {
@@ -591,6 +485,19 @@ try {
         largeNote.body.length > 600_000,
         "Large encrypted responses match native client limits",
       );
+      if (process.env.AGENTVIEW_PWA_PERFORMANCE_ONLY === "1") {
+        await longConversationSmoke(page, first);
+        assert.deepEqual(errors, []);
+        console.log(`${engine.name()}: long-conversation regression passed`);
+        continue;
+      }
+      if (process.env.AGENTVIEW_PWA_ENERGY_ONLY === "1") {
+        await energySmoke(page, first);
+        await longConversationSmoke(page, first);
+        assert.deepEqual(errors, []);
+        continue;
+      }
+      await energySmoke(page, first);
       await page.getByLabel("Message your agent").fill("A draft worth keeping");
       await page.locator(".mobile-live").click();
       await page
@@ -743,6 +650,9 @@ try {
       });
       assert.equal(rawStorage.sealed, true);
       assert.ok(!rawStorage.plain.includes("secret"));
+      await chatRecoverySmoke(page, first, captures);
+      await historyOrderSmoke(page, first);
+      await longConversationSmoke(page, first);
       await expandedWorkspace(page, engine.name());
       if (engine === chromium) {
         await page.evaluate(() => navigator.serviceWorker.ready);

@@ -19,6 +19,19 @@ with the Windows client. Its static deployment delivers application
 files. Each phone pairs with its own Windows host; that host retains its vault,
 repositories, agent sign-in and execution. There is no shared hosted agent account.
 
+## Writing messages
+
+The message draft sits in its own bubble above the attachment, model and send
+controls. It starts at one line and grows toward Context as you type, then scrolls
+inside the bubble when the available space is full. It adapts to the keyboard and
+screen rotation. When Host accepts a send, the bubble floats into the conversation
+and a fresh one expands in its place. Reduced-motion preferences skip this motion.
+While delivery is pending the draft is read-only; failed or uncertain sends keep
+it for recovery. This composer behavior is specific to the PWA.
+While a message will steer a running agent, the draft and its send animation use
+the same muted, dashed style as the pending message in chat. The draft returns to
+its normal appearance when that agent finishes or when Queue is selected.
+
 ## Install and pair
 
 1. Open [agentviewapp.hardline-labs.com](https://agentviewapp.hardline-labs.com) in Safari on iPhone.
@@ -43,6 +56,14 @@ The same site works on Android and desktop browsers. Supporting browsers offer a
 **Install app** prompt. No App Store account or native client reinstall is needed.
 
 ## Connection and device storage
+
+With Host 0.4.3-dev.3 or later, each chat has an **Auto-approve** toggle. Full access
+must be selected in Workspace settings, and the conversation must belong to
+AgentView. Enabling accepts supported command, file-change and permission requests
+for that chat even while your phone is away. Questions and sign-in flows still
+come to you. The choice is saved on Host; new chats start with it off. See
+[approval behavior](host-operation.md#permissions-and-computer-use) for its scope
+and recent activity record.
 
 The PWA uses the host's publicly trusted WSS endpoint, even on the same Wi-Fi.
 Browser JavaScript cannot implement native certificate pinning for AgentView's
@@ -127,9 +148,27 @@ Pinch zoom remains available.
 
 During brief app switches or reconnects, the browser keeps the last known messages
 visible and shows a small **Updating** indicator above the composer while refreshing.
-Up to five recently opened conversations stay in memory for the current session;
-transcripts are not written to browser storage. A cold reload or an app discarded by
-iOS still needs to retrieve its conversation from the Host.
+Up to five recently opened conversations share a 4 MiB estimated content budget
+in memory for the current session. Larger conversations remain readable while open
+but are not retained in that recent-chat cache. Transcripts are not written to browser
+storage. A cold reload or an app discarded by iOS still retrieves history from Host.
+
+Long conversations render a moving window of individual messages and tool calls,
+including when most of the work happened in one turn. Scroll upward and use
+**Earlier messages** to read older history. Tool output enters the page when its
+details are expanded; expansion is remembered while the chat remains open.
+Typing does not rerender unchanged messages, and streamed updates are grouped by
+animation frame. Windows 0.4.3 shares these rendering improvements; Host history
+is unchanged. Browser Find and text selection only cover currently mounted
+messages in a long chat; use Copy on a visible message to copy its full text.
+Loading the oldest page removes the history control in the same layout update as
+the new rows, preserving the reading position through delayed height measurements.
+
+If a new conversation's saved history is still being written, the accepted turn
+stays visible with **Loading saved history** until it can be read. Sending does
+not reset the selected model or effort. Steering messages appear immediately in a
+muted pending style, then become ordinary messages when the runtime reports the
+input. **Waiting for agent** indicates queued input, not a read receipt.
 
 WebKit has [reported viewport-height errors](https://bugs.webkit.org/show_bug.cgi?id=254868)
 in installed apps that exclude safe areas from some height measurements. Applying
@@ -141,6 +180,36 @@ This workaround still requires physical iPhone validation. The PWA already reque
 Some iOS versions also have a separate [system-owned status-strip bug](https://bugs.webkit.org/show_bug.cgi?id=301994).
 CSS cannot draw outside the viewport iOS grants the app; forcing `screen.height`
 would put controls offscreen. The system clock and home indicator are not hidden.
+
+## Rendering and battery use
+
+The browser brain uses flat, subdued domain-colored nodes on a near-black surface.
+Agent travel, animated connections, file-change pulses, dragging and zoom remain
+live. A settled network is cached at the display's native pixel density while
+agents animate over it; labels and links are rebuilt only when their scene changes.
+Metadata-only graph refreshes retain the existing layout instead of reheating it.
+The canvas and force simulation stop when the phone shows chat or the app is in
+the background. A visible, idle brain stops drawing after layout and pulses settle.
+Input, graph updates, foreground return, resize, font loading and display-density
+changes wake it again. Returning to the same-sized view preserves pan and zoom.
+
+Camera QR decoding loads only when the scanner opens. The install cache includes
+that optional module for offline use, but excludes duplicate legacy WOFF fonts;
+supported browsers use the same fonts in WOFF2. Connection suspension, encrypted
+draft storage, update checks and notification behavior are unchanged.
+
+The energy regression uses 160 notes, 620 links and three synthetic agents through
+the encrypted Host. It compares idle brain, active brain, phone chat and background
+states, checks layout retention and wake-up, and records three 3-second samples per
+state. Run with `AGENTVIEW_PWA_ENERGY_ONLY=1` and `npm run pwa:smoke`; it also runs
+in the full suite. `AGENTVIEW_PWA_CAPTURES` saves screenshots and measurement JSON.
+`AGENTVIEW_ENERGY_BASELINE=1` permits the old continuous-rendering behavior when
+measuring an earlier client build; set `AGENTVIEW_PWA_BUILD` to that checkout's
+`dist/client` directory. Baselines allow 60 seconds for slow software-rendered
+layouts to settle; current clients must become idle within 45 seconds.
+Canvas work and Chromium main-thread time are
+performance/battery-cost proxies on the test workstation, not measured phone
+battery life. Physical iPhone validation remains separate.
 
 ## Updates
 
@@ -198,6 +267,20 @@ geometry because Playwright cannot inject wheel input in that mode.
 Chromium additionally exercises camera-frame QR decoding,
 offline shell and update/draft recovery. These do not establish physical iPhone
 camera, keyboard, installation or cellular behavior; verify those on an iPhone.
+
+The long-conversation regression uses 1,200 items in one turn and checks mounted
+message counts, input-to-frame timing against an empty chat, expanded tools, history pagination and
+scrolling during streamed output in both browsers. Run it alone with
+`AGENTVIEW_PWA_PERFORMANCE_ONLY=1` and `npm run pwa:smoke`; it also runs in the full
+suite. Measurements describe the test computer, not physical iPhone performance.
+
+The full suite also exercises chat auto-approval through the encrypted Host API
+in Chromium and WebKit: pending approvals, command/file/permission responses,
+questions remaining manual, isolation, an absent client, reload, permission-mode
+pause and opt-out. `tests/auto-approve.test.ts` additionally verifies saved settings
+across Host replacement and concurrent client changes. The runtime requests in
+these checks are synthetic and never touch creator conversations.
+Set `AGENTVIEW_PWA_BROWSER=chromium` or `webkit` to repeat one browser's full suite.
 
 For a public-path check, install `cloudflared`, set `AGENTVIEW_PWA_URL` to the
 published HTTPS client and run `npm run pwa:remote-smoke`. This starts a temporary

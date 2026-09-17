@@ -60,6 +60,17 @@ try {
     id,
     name: "AgentView installed approval validation",
   });
+  const capabilities = await client.request("api.capabilities", {});
+  if (capabilities.methods.includes("thread.autoApprove")) {
+    assert.ok(!client.snapshot?.autoApproveThreads?.includes(id!));
+    await client.request("thread.autoApprove", { id, enabled: true });
+    const enabled = await client.request("snapshot", {});
+    assert.ok(enabled.autoApproveThreads.includes(id));
+    await client.request("thread.autoApprove", { id, enabled: false });
+    const disabled = await client.request("snapshot", {});
+    assert.ok(!disabled.autoApproveThreads.includes(id));
+    console.log("Installed chat auto-approval opt-in and opt-out passed");
+  }
   const started = recover
     ? null
     : await client.request("thread.send", {
@@ -113,9 +124,11 @@ try {
   );
 } finally {
   if (id)
-    await client.request("thread.delete", { id, confirm: id }).catch((error) => {
-      console.error(`Test conversation ${id} retained: ${error.message}`);
-      process.exitCode = 1;
-    });
+    await client
+      .request("thread.delete", { id, confirm: id })
+      .catch((error) => {
+        console.error(`Test conversation ${id} retained: ${error.message}`);
+        process.exitCode = 1;
+      });
   client.disconnect();
 }

@@ -64,6 +64,34 @@ attachments in the message. Steering requires the expected active turn ID and
 does not change its model or permissions. Active conversations cannot be archived
 or deleted. Runtime descendant semantics apply to those lifecycle calls.
 
+`thread.read` may return `historyPending: true` with cached live turns while a
+new rollout's metadata is not yet readable. Keep the current page and retry this
+read; do not resend the accepted message. `thread.send` also returns `thread`
+metadata so clients can display its accepted turn before the first history read.
+
+Send/steer accept `clientUserMessageId` for reconciliation with runtime user-message
+items. The durable wrapper uses `requestId` as that identity; clients creating
+optimistic messages should use the same ID for both. A successful steer response
+confirms runtime acceptance, while the user-message event confirms input delivery.
+
+`thread.autoApprove` accepts `{ id, enabled }` and returns the saved choice.
+Enabling requires Full access and an AgentView-owned chat. Disabling is allowed
+even while the agent runtime is disconnected. The Host serializes concurrent
+changes and persists them before acknowledging. New snapshots include optional
+`autoApproveThreads: string[]`; its presence advertises support to clients.
+`autoApprove` events replace that list via `threads`. Older hosts omit the field
+and clients hide the control. Full access gates every automatic response;
+permission changes broadcast the ordinary `preferences` event. Automatic decisions
+appear as `activity` events with `action: "auto-approved"` and the exact `threadId`.
+The saved setting applies only to that conversation, without inheritance to forks
+or descendants. See [Host operation](host-operation.md#permissions-and-computer-use)
+for pause/resume, persistence and supported request types.
+
+`approval.respond` accepts `id` and `allow`. For a form-mode MCP elicitation, Allow
+also accepts `content`, an object matching `requestedSchema`; Host checks required
+fields, primitive types and choices. Decline needs no content. URL-mode acceptance
+has null content. Extended OpenAI forms are not enabled by this client.
+
 ## Runtime discovery adapters
 
 `runtime.models`, `.skills`, `.plugins`, `.apps`, `.mcp`, `.features`, `.permissions`,

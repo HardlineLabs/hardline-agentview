@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { ConversationTranscript, ToolState } from "./Transcript";
 import {
   ArrowUp,
   Square,
@@ -19,17 +20,23 @@ import {
   ArchiveRestore,
   Trash2,
 } from "lucide-react";
-import { ChoicePicker } from "../browser/ChoicePicker";
+import { ChoicePicker } from "./ChoicePicker";
+import { useComposer } from "./composer";
 import { ContextUsage } from "./Usage";
+import { ElicitationFields } from "./ElicitationFields";
+import {
+  elicitationContent,
+  type ElicitationSchema,
+} from "../shared/elicitation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { invoke, browser } from "./api";
+import { invoke } from "./api";
 import {
-  browserDrafts,
-  browserAttachments,
+  drafts as clientDrafts,
+  attachments as attachmentsState,
   saveDrafts,
   type Attachment,
-} from "../browser/bridge";
+} from "./client-state";
 import type {
   Approval,
   ChatItem,
@@ -40,7 +47,6 @@ import type {
   Thread,
   Turn,
 } from "../shared/types";
-
 export function Markdown({ text }: { text: string }) {
   return (
     <ReactMarkdown
@@ -66,7 +72,9 @@ export function Markdown({ text }: { text: string }) {
     </ReactMarkdown>
   );
 }
-function Item({ item }: { item: ChatItem }) {
+function Item({ item, lazy = false }: { item: ChatItem; lazy?: boolean }) {
+  const expanded = useContext(ToolState);
+  const [open, setOpen] = useState(() => Boolean(expanded?.has(item.id)));
   if (item.type === "userMessage") {
     const text =
       item.content
@@ -111,7 +119,20 @@ function Item({ item }: { item: ChatItem }) {
       ? item.changes?.map((c) => c.path.split(/[\\/]/).pop()).join(", ")
       : String(item.tool || item.query || item.type));
   return (
-    <details className="tool-item">
+    <details
+      className="tool-item"
+      open={lazy ? open : undefined}
+      onToggle={
+        lazy
+          ? (event) => {
+              const next = event.currentTarget.open;
+              if (next) expanded?.add(item.id);
+              else expanded?.delete(item.id);
+              setOpen(next);
+            }
+          : undefined
+      }
+    >
       <summary>
         {item.type === "fileChange" ? (
           <FileText size={13} />
@@ -127,14 +148,18 @@ function Item({ item }: { item: ChatItem }) {
           <Check size={12} />
         )}
       </summary>
-      <pre>
-        {item.command || text}
-        {item.aggregatedOutput ? "\n\n" + item.aggregatedOutput : ""}
-        {item.changes?.map((c) => "\n" + (c.diff || c.path)).join("")}
-      </pre>
+      {(!lazy || open) && (
+        <pre>
+          {item.command || text}
+          {item.aggregatedOutput ? "\n\n" + item.aggregatedOutput : ""}
+          {item.changes?.map((c) => "\n" + (c.diff || c.path)).join("")}
+        </pre>
+      )}
     </details>
   );
 }
+const ConversationItem = memo(Item);
+const emptyTurns: Turn[] = [];
 function ApprovalCard({
   approval,
   onError,
@@ -144,19 +169,39 @@ function ApprovalCard({
 }) {
   const [busy, setBusy] = useState(false);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const elicitation = approval.method === "mcpServer/elicitation/request";
+  const schema: ElicitationSchema | undefined =
+    elicitation && approval.params.mode === "form"
+      ? approval.params.requestedSchema
+      : undefined;
+  const [content, setContent] = useState<Record<string, unknown>>(() =>
+    Object.fromEntries(
+      Object.entries(schema?.properties || {})
+        .filter(([, field]) => field.default !== undefined)
+        .map(([name, field]) => [name, field.default]),
+    ),
+  );
+  const form = useRef<HTMLFormElement>(null);
   const questions = approval.params.questions as
     | {
         id: string;
         question: string;
-        options?: { label: string; description?: string }[];
+        options?: {
+          label: string;
+          description?: string;
+        }[];
       }[]
     | undefined;
   const respond = async (allow: boolean) => {
+    if (allow && !form.current?.reportValidity()) return;
     setBusy(true);
     try {
       await invoke("approval.respond", {
         id: approval.id,
         allow,
+        ...(allow && schema
+          ? { content: elicitationContent(schema, content) }
+          : {}),
         answers: Object.fromEntries(
           Object.entries(answers).map(([id, answer]) => [
             id,
@@ -171,7 +216,14 @@ function ApprovalCard({
     }
   };
   return (
-    <div className="approval-card">
+    <form
+      ref={form}
+      className="approval-card"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void respond(true);
+      }}
+    >
       <div className="eyebrow">
         <AlertCircle size={13} /> Your attention
       </div>
@@ -183,6 +235,7 @@ function ApprovalCard({
               <div className="answer-options">
                 {q.options.map((o) => (
                   <button
+                    type="button"
                     className={answers[q.id] === o.label ? "selected" : ""}
                     key={o.label}
                     onClick={() =>
@@ -206,10 +259,27 @@ function ApprovalCard({
       ) : (
         <p>
           {approval.params.reason ||
+            approval.params.message ||
             approval.params.command ||
             "The agent needs permission to continue."}
         </p>
       )}
+      {schema && (
+        <ElicitationFields
+          schema={schema}
+          values={content}
+          onChange={(name, value) =>
+            setContent((c) => ({ ...c, [name]: value }))
+          }
+        />
+      )}
+      {elicitation &&
+        approval.params.mode === "url" &&
+        /^https?:\/\//i.test(approval.params.url) && (
+          <a href={approval.params.url} target="_blank" rel="noreferrer">
+            Open permission request
+          </a>
+        )}
       {!questions &&
         (approval.params.command ||
           approval.params.permissions ||
@@ -228,24 +298,36 @@ function ApprovalCard({
         )}
       <div className="approval-actions">
         {!questions && (
-          <button disabled={busy} onClick={() => void respond(false)}>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void respond(false)}
+          >
             Decline
           </button>
         )}
         <button
+          type="submit"
           className="primary"
           disabled={
             busy || Boolean(questions?.some((q) => !answers[q.id]?.trim()))
           }
-          onClick={() => void respond(true)}
         >
           {busy ? "Sending…" : questions ? "Send answer" : "Allow"}
         </button>
       </div>
-    </div>
+    </form>
   );
 }
 type Props = {
+  autoApproveSupported?: boolean;
+  autoApproveEnabled?: boolean;
+  fullAccess?: boolean;
+  approvalActivity?: {
+    id: string;
+    detail: string;
+    time: number;
+  }[];
   expanded?: boolean;
   onboarding?: string;
   thread?: Thread;
@@ -259,7 +341,7 @@ type Props = {
   attachment?: Note;
   onDetach: () => void;
   onNew: () => void;
-  onSent: (id: string, turn: Turn) => void;
+  onSent: (thread: Thread, turn: Turn) => void;
   onLoadMore: () => void;
   onError: (message: string) => void;
   onHide: () => void;
@@ -276,16 +358,34 @@ export function Chat(props: Props) {
   const [queueMode, setQueueMode] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const persist = () => {
-    if (browser) void saveDrafts().catch((e) => props.onError(e.message));
+    void saveDrafts().catch((e) => props.onError(e.message));
   };
   const [text, setText] = useState("");
-  const drafts = useRef(browser ? browserDrafts : new Map<string, string>());
+  const drafts = useRef(clientDrafts);
   const [sending, setSending] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [approvalBusy, setApprovalBusy] = useState(false);
   const [confirmClear, setConfirmClear] = useState<"archive" | "delete">();
   const [sentNotice, setSentNotice] = useState("");
+  const [steering, setSteering] = useState<
+    {
+      id: string;
+      threadId: string;
+      text: string;
+      state: "sending" | "waiting" | "uncertain";
+    }[]
+  >([]);
   const [model, setModel] = useState("");
   const [effort, setEffort] = useState("high");
+  const choices = useRef(
+    new Map<
+      string,
+      {
+        model: string;
+        effort: string;
+      }
+    >(),
+  );
   const [projectId, setProjectId] = useState("vault");
   const scroll = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
@@ -295,18 +395,37 @@ export function Chat(props: Props) {
     props.page?.turns.some((t) => t.status === "inProgress"),
   );
   const currentModel = props.models.find((m) => m.id === model);
+  const received = useMemo(() => {
+    const ids = new Set<string>();
+    for (const turn of props.page?.turns || [])
+      for (const item of turn.items) {
+        if (item.type !== "userMessage") continue;
+        ids.add(item.id);
+        if (item.clientId) ids.add(item.clientId);
+      }
+    return ids;
+  }, [props.page?.turns]);
   useEffect(() => {
+    setSteering((messages) =>
+      messages.some((m) => received.has(m.id))
+        ? messages.filter((m) => !received.has(m.id))
+        : messages,
+    );
+  }, [received]);
+  useEffect(() => {
+    const saved = choices.current.get(props.thread?.id || "new");
     setModel(
-      props.thread?.model ||
+      saved?.model ||
+        props.thread?.model ||
         props.models.find((m) => m.isDefault)?.id ||
         props.models[0]?.id ||
         "",
     );
-    setEffort(props.thread?.reasoningEffort || "high");
+    setEffort(saved?.effort || props.thread?.reasoningEffort || "high");
+  }, [props.thread?.id, props.thread?.model, props.thread?.reasoningEffort]);
+  useEffect(() => {
     setText(drafts.current.get(props.thread?.id || "new") || "");
-    setAttachments(
-      browser ? browserAttachments.get(props.thread?.id || "new") || [] : [],
-    );
+    setAttachments(attachmentsState.get(props.thread?.id || "new") || []);
     setRename(undefined);
     setRenamed(undefined);
     setRecovery(undefined);
@@ -315,6 +434,21 @@ export function Chat(props: Props) {
     setSentNotice("");
     follow.current = true;
   }, [props.thread?.id]);
+  const chooseEffort = (value: string) => {
+    choices.current.set(props.thread?.id || "new", { model, effort: value });
+    setEffort(value);
+  };
+  const chooseModel = (value: string) => {
+    const nextEffort =
+      props.models.find((m) => m.id === value)?.defaultReasoningEffort ||
+      "high";
+    choices.current.set(props.thread?.id || "new", {
+      model: value,
+      effort: nextEffort,
+    });
+    setModel(value);
+    setEffort(nextEffort);
+  };
   useEffect(() => {
     if (!model && props.models.length)
       setModel(props.models.find((m) => m.isDefault)?.id || props.models[0].id);
@@ -322,9 +456,9 @@ export function Chat(props: Props) {
   useEffect(() => {
     if (follow.current && scroll.current)
       scroll.current.scrollTop = scroll.current.scrollHeight;
-  }, [props.page, sending]);
+  }, [props.page, sending, steering]);
   useEffect(() => {
-    if (!browser || !scroll.current) return;
+    if (!scroll.current) return;
     const panel = scroll.current;
     const observer = new ResizeObserver(() => {
       // Keep the latest message above the keyboard, unless reading history.
@@ -334,17 +468,7 @@ export function Chat(props: Props) {
     observer.observe(panel);
     return () => observer.disconnect();
   }, []);
-  useLayoutEffect(() => {
-    if (!browser || !input.current) return;
-    const element = input.current;
-    const resize = () => {
-      element.style.height = "auto";
-      element.style.height = `${element.scrollHeight}px`;
-    };
-    resize();
-    window.addEventListener("resize", resize);
-    return () => window.removeEventListener("resize", resize);
-  }, [text, props.thread?.id]);
+  const animateSend = useComposer(input, follow, true, text, props.thread?.id);
   const send = async (onboardingText?: string) => {
     const outgoingText = onboardingText ?? text;
     if (
@@ -358,10 +482,28 @@ export function Chat(props: Props) {
       return;
     setSending(true);
     const draftId = props.thread?.id || "new";
+    const messageId = crypto.randomUUID();
+    const isSteering = active && !queueMode;
+    if (isSteering) {
+      follow.current = true;
+      setSteering((messages) => [
+        ...messages,
+        {
+          id: messageId,
+          threadId: draftId,
+          text: [outgoingText, ...attachments.map((a) => `[${a.name}]`)].join(
+            "\n",
+          ),
+          state: "sending",
+        },
+      ]);
+    }
     try {
+      let created: Thread | undefined;
       let id = props.thread?.id;
       if (!id) {
         const thread = await invoke("thread.create", { projectId, model });
+        created = thread;
         id = thread.id;
       }
       const result = await invoke(
@@ -372,6 +514,7 @@ export function Chat(props: Props) {
             : "thread.send",
         {
           id,
+          clientUserMessageId: messageId,
           expectedTurnId: props.page?.turns
             .filter((t) => t.status === "inProgress")
             .at(-1)?.id,
@@ -384,23 +527,50 @@ export function Chat(props: Props) {
           noteId: props.attachment?.id,
         },
       );
+      if (isSteering)
+        setSteering((messages) =>
+          messages.map((m) =>
+            m.id === messageId ? { ...m, state: "waiting" } : m,
+          ),
+        );
       drafts.current.delete(draftId);
-      browserAttachments.delete(draftId);
+      attachmentsState.delete(draftId);
       persist();
       if (currentChat.current !== draftId) return;
+      if (!onboardingText) animateSend(isSteering);
       setAttachments([]);
       setText("");
       props.onDetach();
       if (active && queueMode) setSentNotice("Follow-up queued on the host.");
-      else if (result.steered)
-        setSentNotice("Steering message accepted by the active agent.");
-      else props.onSent(result.threadId, result.turn);
+      else if (!result.steered) {
+        choices.current.set(result.threadId, { model, effort });
+        props.onSent(
+          {
+            ...(result.thread || created || props.thread),
+            id: result.threadId,
+            model,
+            reasoningEffort: effort,
+            owned: true,
+          },
+          result.turn,
+        );
+      }
       follow.current = true;
     } catch (e: any) {
+      if (isSteering)
+        setSteering((messages) =>
+          /disconnect|did not answer|unavailable|stopped|uncertain/i.test(
+            e.message,
+          )
+            ? messages.map((m) =>
+                m.id === messageId ? { ...m, state: "uncertain" } : m,
+              )
+            : messages.filter((m) => m.id !== messageId),
+        );
       props.onError(e.message);
     } finally {
       setSending(false);
-      if (!browser) input.current?.focus();
+      if (import.meta.env.MODE !== "pwa") input.current?.focus();
       else if (
         currentChat.current === draftId &&
         input.current
@@ -471,7 +641,7 @@ export function Chat(props: Props) {
           ...uploaded,
           preview: file.type.startsWith("image/") ? dataUrl : undefined,
         });
-        browserAttachments.set(key, [...next]);
+        attachmentsState.set(key, [...next]);
         if (currentChat.current === key) setAttachments([...next]);
         persist();
       }
@@ -531,6 +701,47 @@ export function Chat(props: Props) {
       {props.thread && (
         <>
           <div className="chat-management">
+            {props.autoApproveSupported && (
+              <button
+                type="button"
+                className="auto-approve-toggle"
+                title={
+                  !props.thread.owned
+                    ? "Continue in AgentView to enable auto-approval."
+                    : !props.fullAccess
+                      ? "Requires Full access in Workspace settings."
+                      : "Automatically allow commands, file changes and permissions in this chat. Questions still come to you."
+                }
+                aria-pressed={Boolean(props.autoApproveEnabled)}
+                disabled={
+                  !props.connected ||
+                  approvalBusy ||
+                  (!props.autoApproveEnabled &&
+                    (!props.fullAccess || !props.thread.owned))
+                }
+                onClick={async () => {
+                  setApprovalBusy(true);
+                  try {
+                    await invoke("thread.autoApprove", {
+                      id: props.thread!.id,
+                      enabled: !props.autoApproveEnabled,
+                    });
+                  } catch (e: any) {
+                    props.onError(e.message);
+                  } finally {
+                    setApprovalBusy(false);
+                  }
+                }}
+              >
+                {approvalBusy
+                  ? "Saving…"
+                  : props.autoApproveEnabled
+                    ? props.fullAccess
+                      ? "Auto-approve on"
+                      : "Auto-approve paused"
+                    : "Auto-approve off"}
+              </button>
+            )}
             {props.expanded && (
               <>
                 <button
@@ -657,18 +868,37 @@ export function Chat(props: Props) {
               </button>
             </div>
           )}
-          <ContextUsage usage={props.thread.usage} compact={browser} />
+          <ContextUsage usage={props.thread.usage} compact={true} />
         </>
       )}
       <div
         className="chat-scroll"
         ref={scroll}
-        onScroll={() => {
+        onScrollCapture={() => {
+          // Record bottom-follow intent before virtual rows measure new heights.
           const e = scroll.current!;
           follow.current = e.scrollHeight - e.scrollTop - e.clientHeight < 90;
         }}
       >
-        {props.loading && (!browser || !props.page) ? (
+        {Boolean(props.approvalActivity?.length) && (
+          <details className="auto-approve-history">
+            <summary>
+              Recent auto-approvals ({props.approvalActivity!.length})
+            </summary>
+            <ul>
+              {props.approvalActivity!.slice(0, 10).map((entry) => (
+                <li key={entry.id}>
+                  {entry.detail} ·{" "}
+                  {new Date(entry.time).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+        {props.loading && !props.page ? (
           <div className="chat-loading">
             <LoaderCircle className="spin" size={18} /> Opening conversation
           </div>
@@ -724,23 +954,39 @@ export function Chat(props: Props) {
                 <ArrowLeft size={12} /> Earlier messages
               </button>
             )}
-            {props.page?.turns.map((turn) => (
-              <div className="turn" key={turn.id}>
-                {turn.items.map((item) => (
-                  <Item item={item} key={item.id} />
-                ))}
-                {turn.error && (
-                  <div className="inline-error">{turn.error.message}</div>
-                )}
-              </div>
-            ))}
-            {!props.page?.turns.length && (
+            <ConversationTranscript
+              key={props.thread.id}
+              hasEarlier={Boolean(props.page?.nextCursor)}
+              turns={props.page?.turns || emptyTurns}
+              scroll={scroll}
+              follow={follow}
+              Item={ConversationItem}
+            />
+            {!props.page?.turns.length && !props.page?.historyPending && (
               <p className="muted empty-history">
                 The conversation is ready for your first message.
               </p>
             )}
           </>
         )}
+        {steering
+          .filter((m) => m.threadId === props.thread?.id && !received.has(m.id))
+          .map((message) => (
+            <div
+              key={message.id}
+              className="user-message steering-pending"
+              role="status"
+            >
+              <div>{message.text}</div>
+              <small>
+                {message.state === "sending"
+                  ? "Sending…"
+                  : message.state === "waiting"
+                    ? "Waiting for agent"
+                    : "Delivery unconfirmed — check before resending"}
+              </small>
+            </div>
+          ))}
         {(active || sending) && (
           <div className="working-indicator">
             <i />
@@ -758,7 +1004,12 @@ export function Chat(props: Props) {
           ))}
       </div>
       <div className="composer-area">
-        {browser && props.page && (props.loading || !props.connected) && (
+        {props.page?.historyPending && (
+          <div className="conversation-updating" role="status">
+            <LoaderCircle className="spin" size={12} /> Loading saved history…
+          </div>
+        )}
+        {props.page && (props.loading || !props.connected) && (
           <div className="conversation-updating" role="status">
             <LoaderCircle className="spin" size={12} />
             {props.connected
@@ -800,78 +1051,83 @@ export function Chat(props: Props) {
           </div>
         )}
         <div className="composer">
-          {props.expanded && (
-            <>
-              <input
-                ref={fileInput}
-                type="file"
-                multiple
-                hidden
-                aria-label="Attach files or images"
-                onChange={(e) => void upload(e.target.files)}
-              />
-              <div className="message-attachments">
-                {attachments.map((a) => (
-                  <div key={a.id}>
-                    {a.preview && <img src={a.preview} alt={a.name} />}
-                    <span>{a.name}</span>
-                    <button
-                      aria-label={`Remove ${a.name}`}
-                      onClick={() => {
-                        const next = attachments.filter(
-                          (item) => item.id !== a.id,
-                        );
-                        setAttachments(next);
-                        browserAttachments.set(props.thread?.id || "new", next);
-                        persist();
-                      }}
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
+          <div
+            className={`composer-draft${active && !queueMode ? " composer-steering" : ""}`}
+          >
+            {props.expanded && (
+              <>
+                <input
+                  ref={fileInput}
+                  type="file"
+                  multiple
+                  hidden
+                  aria-label="Attach files or images"
+                  onChange={(e) => void upload(e.target.files)}
+                />
+                <div className="message-attachments">
+                  {attachments.map((a) => (
+                    <div key={a.id}>
+                      {a.preview && <img src={a.preview} alt={a.name} />}
+                      <span>{a.name}</span>
+                      <button
+                        aria-label={`Remove ${a.name}`}
+                        onClick={() => {
+                          const next = attachments.filter(
+                            (item) => item.id !== a.id,
+                          );
+                          setAttachments(next);
+                          attachmentsState.set(props.thread?.id || "new", next);
+                          persist();
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+            {props.attachment && (
+              <div className="attached-note">
+                <FileText size={12} />
+                <span>{props.attachment.title}</span>
+                <button onClick={props.onDetach} title="Remove attachment">
+                  <X size={12} />
+                </button>
               </div>
-            </>
-          )}
-          {props.attachment && (
-            <div className="attached-note">
-              <FileText size={12} />
-              <span>{props.attachment.title}</span>
-              <button onClick={props.onDetach} title="Remove attachment">
-                <X size={12} />
-              </button>
-            </div>
-          )}
-          <textarea
-            ref={input}
-            aria-label="Message your agent"
-            placeholder={
-              props.connected
-                ? active
-                  ? "Steer the agent while it works…"
-                  : "Give your ideas somewhere to go…"
-                : "Reconnect to continue…"
-            }
-            value={text}
-            disabled={props.thread?.archived}
-            onChange={(e) => {
-              setText(e.target.value);
-              drafts.current.set(props.thread?.id || "new", e.target.value);
-              persist();
-            }}
-            onKeyDown={(e) => {
-              if (
-                !window.matchMedia("(pointer: coarse)").matches &&
-                e.key === "Enter" &&
-                !e.shiftKey &&
-                !e.nativeEvent.isComposing
-              ) {
-                e.preventDefault();
-                void send();
+            )}
+            <textarea
+              ref={input}
+              aria-label="Message your agent"
+              placeholder={
+                props.connected
+                  ? active
+                    ? "Steer the agent while it works…"
+                    : "Give your ideas somewhere to go…"
+                  : "Reconnect to continue…"
               }
-            }}
-            rows={browser ? 1 : 3}
-          />
+              value={text}
+              disabled={props.thread?.archived}
+              readOnly={sending}
+              onChange={(e) => {
+                setText(e.target.value);
+                drafts.current.set(props.thread?.id || "new", e.target.value);
+                persist();
+              }}
+              onKeyDown={(e) => {
+                if (
+                  !window.matchMedia("(pointer: coarse)").matches &&
+                  e.key === "Enter" &&
+                  !e.shiftKey &&
+                  !e.nativeEvent.isComposing
+                ) {
+                  e.preventDefault();
+                  void send();
+                }
+              }}
+              rows={1}
+            />
+          </div>
           <div className="composer-bottom">
             {props.expanded && (
               <button
@@ -884,77 +1140,30 @@ export function Chat(props: Props) {
               </button>
             )}
             <div className="model-controls">
-              {browser ? (
-                <>
-                  <ChoicePicker
-                    label="Model"
-                    value={model}
-                    disabled={active}
-                    options={props.models.map((m) => ({
-                      value: m.id,
-                      label: m.displayName,
-                    }))}
-                    onChange={(value) => {
-                      setModel(value);
-                      setEffort(
-                        props.models.find((m) => m.id === value)
-                          ?.defaultReasoningEffort || "high",
-                      );
-                    }}
-                  />
-                  <ChoicePicker
-                    label="Reasoning effort"
-                    value={effort}
-                    disabled={active}
-                    options={(
-                      currentModel?.supportedReasoningEfforts || [
-                        { reasoningEffort: "high" },
-                      ]
-                    ).map((e) => ({
-                      value: e.reasoningEffort,
-                      label: e.reasoningEffort,
-                    }))}
-                    onChange={setEffort}
-                  />
-                </>
-              ) : (
-                <>
-                  <select
-                    aria-label="Model"
-                    disabled={active}
-                    value={model}
-                    onChange={(e) => {
-                      setModel(e.target.value);
-                      setEffort(
-                        props.models.find((m) => m.id === e.target.value)
-                          ?.defaultReasoningEffort || "high",
-                      );
-                    }}
-                  >
-                    {props.models.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.displayName}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    aria-label="Reasoning effort"
-                    disabled={active}
-                    value={effort}
-                    onChange={(e) => setEffort(e.target.value)}
-                  >
-                    {(
-                      currentModel?.supportedReasoningEfforts || [
-                        { reasoningEffort: "high" },
-                      ]
-                    ).map((e) => (
-                      <option key={e.reasoningEffort} value={e.reasoningEffort}>
-                        {e.reasoningEffort}
-                      </option>
-                    ))}
-                  </select>
-                </>
-              )}
+              <ChoicePicker
+                label="Model"
+                value={model}
+                disabled={active || sending}
+                options={props.models.map((m) => ({
+                  value: m.id,
+                  label: m.displayName,
+                }))}
+                onChange={chooseModel}
+              />
+              <ChoicePicker
+                label="Reasoning effort"
+                value={effort}
+                disabled={active || sending}
+                options={(
+                  currentModel?.supportedReasoningEfforts || [
+                    { reasoningEffort: "high" },
+                  ]
+                ).map((e) => ({
+                  value: e.reasoningEffort,
+                  label: e.reasoningEffort,
+                }))}
+                onChange={chooseEffort}
+              />
             </div>
             {active && (
               <button
@@ -969,27 +1178,25 @@ export function Chat(props: Props) {
                 <Square size={14} fill="currentColor" />
               </button>
             )}
-            {
-              <button
-                className="send-button"
-                title={active ? "Steer agent" : "Send message"}
-                disabled={
-                  (!text.trim() && !attachments.length) ||
-                  uploading ||
-                  sending ||
-                  !props.connected ||
-                  !props.ready ||
-                  props.thread?.archived
-                }
-                onClick={() => void send()}
-              >
-                {sending ? (
-                  <LoaderCircle className="spin" size={17} />
-                ) : (
-                  <ArrowUp size={18} />
-                )}
-              </button>
-            }
+            <button
+              className="send-button"
+              title={active ? "Steer agent" : "Send message"}
+              disabled={
+                (!text.trim() && !attachments.length) ||
+                uploading ||
+                sending ||
+                !props.connected ||
+                !props.ready ||
+                props.thread?.archived
+              }
+              onClick={() => void send()}
+            >
+              {sending ? (
+                <LoaderCircle className="spin" size={17} />
+              ) : (
+                <ArrowUp size={18} />
+              )}
+            </button>
           </div>
         </div>
         {props.expanded && active && (

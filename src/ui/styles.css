@@ -593,6 +593,24 @@ kbd {
   margin-left: auto;
   color: #7f969f;
 }
+.chat-management .auto-approve-toggle[aria-pressed="true"] {
+  color: #79e2d0;
+}
+.auto-approve-history {
+  font-size: 11px;
+  margin-bottom: 10px;
+  width: 100%;
+  color: var(--muted);
+}
+.auto-approve-history summary {
+  cursor: pointer;
+}
+.auto-approve-history ul {
+  max-height: 100px;
+  overflow: auto;
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
 .chat-management {
   display: flex;
   align-items: center;
@@ -1086,6 +1104,9 @@ meter::-webkit-meter-optimum-value {
     border-color 0.2s,
     box-shadow 0.2s;
 }
+.composer-draft {
+  display: contents;
+}
 .composer:focus-within {
   border-color: #b8e1c84d;
   box-shadow:
@@ -1417,6 +1438,14 @@ meter::-webkit-meter-optimum-value {
   padding: 13px;
   background: #b3a27b09;
   margin: 15px 0;
+}
+.user-message.steering-pending {
+  opacity: 0.7;
+  border: 1px dashed currentColor;
+}
+.steering-pending small {
+  display: block;
+  margin-top: 6px;
 }
 .approval-card .eyebrow {
   color: #c8b088;

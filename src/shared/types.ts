@@ -79,6 +79,7 @@ export type AccountLimits = {
 };
 export type ChatItem = {
   id: string;
+  clientId?: string | null;
   type: string;
   text?: string;
   content?: { type: string; text?: string }[];
@@ -98,6 +99,7 @@ export type ChatPage = {
   thread: Thread;
   turns: Turn[];
   nextCursor: string | null;
+  historyPending?: boolean;
 };
 export type Project = {
   id: string;
@@ -118,6 +120,7 @@ export type Approval = {
   params: Record<string, any>;
 };
 export type Snapshot = {
+  autoApproveThreads?: string[];
   capabilities?: { apiVersion: number; hostVersion: string };
   preferences?: {
     defaultPermissions: "full" | "workspace" | "read-only";

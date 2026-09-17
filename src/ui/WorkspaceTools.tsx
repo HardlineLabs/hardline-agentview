@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { invoke, subscribe } from "../ui/api";
+import { browser, invoke, subscribe } from "./api";
 import type { Project, Thread } from "../shared/types";
-import { browserOutbox } from "./bridge";
+import { outbox } from "./client-state";
 
 export function WorkspaceTools({
   projects,
@@ -377,13 +377,22 @@ export function WorkspaceTools({
       {tab === "Inbox" && (
         <>
           <p>
-            Get a notification when work finishes or needs your input. On
-            iPhone, enable this from the installed Home Screen app.
+            Get a notification when work finishes or needs your input.{" "}
+            {browser
+              ? "On iPhone, enable this from the installed Home Screen app."
+              : "Keep AgentView open to receive Windows notifications."}
           </p>
           <button
             disabled={busy}
             onClick={() =>
               void run(async () => {
+                if (!browser) {
+                  await invoke("notifications.desktop", { enabled: true });
+                  setMessage(
+                    "Windows notifications enabled while AgentView is open.",
+                  );
+                  return;
+                }
                 if (!("Notification" in window) || !("PushManager" in window))
                   throw new Error(
                     "Install AgentView on your Home Screen to enable iPhone notifications.",
@@ -424,6 +433,11 @@ export function WorkspaceTools({
             disabled={busy}
             onClick={() =>
               void run(async () => {
+                if (!browser) {
+                  await invoke("notifications.desktop", { enabled: false });
+                  setMessage("Windows notifications disabled.");
+                  return;
+                }
                 await invoke("notifications.unsubscribe");
                 const reg = await navigator.serviceWorker.getRegistration();
                 await (await reg?.pushManager.getSubscription())?.unsubscribe();
@@ -445,7 +459,7 @@ export function WorkspaceTools({
           ))}
           <details>
             <summary>Recent outgoing actions</summary>
-            {[...browserOutbox].reverse().map(([id, request]) => (
+            {[...outbox].reverse().map(([id, request]) => (
               <article key={id}>
                 <strong>
                   {request.method} · {request.state}

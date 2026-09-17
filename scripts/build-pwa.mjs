@@ -26,8 +26,8 @@ await writeFile(
       start_url: "/",
       scope: "/",
       display: "standalone",
-      background_color: "#0b1014",
-      theme_color: "#0b1014",
+      background_color: "#05090d",
+      theme_color: "#05090d",
       icons: [192, 512].map((size) => ({
         src: `/icons/icon-${size}.png`,
         sizes: `${size}x${size}`,
