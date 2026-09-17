@@ -62,6 +62,13 @@ async function launch(offline = false) {
   return page;
 }
 try {
+  const readyBy = Date.now() + 10000;
+  while (!host.codex.ready && Date.now() < readyBy)
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  assert.ok(
+    host.codex.ready,
+    "Fixture runtime must be ready before creating a chat",
+  );
   const thread = await host.handle("thread.create", {});
   await host.handle("thread.rename", {
     id: thread.id,
@@ -84,6 +91,42 @@ try {
     .fill("Draft across signed UI update");
   await page.locator('input[type="file"]').setInputFiles("assets/icon.png");
   await page.locator(".message-attachments img").waitFor();
+  // A bundle that never reaches its React readiness acknowledgement must recover
+  // inside the same native process, including the saved draft and attachment.
+  await app!
+    .context()
+    .addInitScript(
+      `if (location.pathname.includes('${manifest.sha256}')) window.requestAnimationFrame = () => 0;`,
+    );
+  await page.getByRole("button", { name: "Update UI", exact: true }).click();
+  await page.waitForURL(`**/${manifest.sha256}/index.html`);
+  await page.waitForURL("**/dist/ui/index.html", { timeout: 30000 });
+  await page
+    .getByText("The update could not start. Restored the working UI.", {
+      exact: true,
+    })
+    .waitFor();
+  await page.waitForFunction(
+    () =>
+      (
+        document.querySelector(
+          '[aria-label="Message your agent"]',
+        ) as HTMLTextAreaElement
+      )?.value === "Draft across signed UI update",
+  );
+  await app!.close();
+  page = await launch();
+  await page.locator(".connection-pill:not(.lost)").waitFor();
+  await page.getByLabel("Message your agent").waitFor();
+  const activeTurn = {
+    id: "update-running-turn",
+    status: "inProgress",
+    items: [] as unknown[],
+  };
+  host.codex.emit("notification", {
+    method: "turn/started",
+    params: { threadId: thread.id, turn: activeTurn },
+  });
   const pid = app!.process().pid;
   await page.getByRole("button", { name: "Update UI", exact: true }).click();
   await page.waitForURL(`**/${manifest.sha256}/index.html`);
@@ -103,6 +146,24 @@ try {
     pid,
     "UI update must keep the native process alive",
   );
+  assert.ok(
+    host
+      .snapshot()
+      .agents.some((agent) => agent.threadId === thread.id && agent.active),
+  );
+  activeTurn.status = "completed";
+  activeTurn.items.push({
+    id: "update-completion",
+    type: "agentMessage",
+    text: "Work completed after the UI update.",
+  });
+  host.codex.emit("notification", {
+    method: "turn/completed",
+    params: { threadId: thread.id, turn: activeTurn },
+  });
+  await page
+    .getByText("Work completed after the UI update.", { exact: true })
+    .waitFor();
   assert.equal(
     host.snapshot().threads.some((item) => item.id === thread.id),
     true,
@@ -139,8 +200,26 @@ try {
   console.log(
     "Signed desktop update: native process continuity, TLS connection, selected chat, draft/attachment preservation, current-version check and offline restart passed.",
   );
+} catch (error) {
+  console.error(error);
+  console.error("Renderer errors:", errors);
+  if (app)
+    console.error(
+      await (
+        await app.firstWindow()
+      )
+        .locator("body")
+        .innerText()
+        .catch(() => "Window unavailable"),
+    );
+  throw error;
 } finally {
   await app?.close();
   await host.stop();
-  await rm(temporary, { recursive: true, force: true });
+  await rm(temporary, {
+    recursive: true,
+    force: true,
+    maxRetries: 5,
+    retryDelay: 200,
+  });
 }
