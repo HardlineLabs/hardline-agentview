@@ -43,6 +43,19 @@ the capability contract for future client interfaces.
 
 ## On Windows
 
+Version 0.4.3 brings the PWA's expanded workspace to the Windows client: saved
+permission defaults and onboarding, chat rename and bulk actions, attachments,
+workspace files, queued follow-ups, recovery and an inbox. Pair with either a
+six-digit remote code or a full LAN/remote invitation. Existing pairings remain valid.
+Drafts, attachment previews, selected chat and outgoing action receipts survive
+restarts in Windows-protected storage. Disconnecting clears that workspace's drafts.
+Inbox can enable Windows notifications while the client is open.
+
+Desktop and web now share the compact growing composer, model pickers, efficient
+long-conversation rendering and graph. Recent chats remain visible during reconnects;
+uncertain actions are checked with the Host and never automatically sent again.
+Native title-bar controls and automatic LAN-to-remote fallback remain available.
+
 Drag notes to play with the network, scroll to zoom, and double-click to fit.
 Select a note to read it or bring it into a conversation. **Ctrl+K** finds notes
 and conversations. Graph settings control labels and gentle motion; you can hide
@@ -85,6 +98,8 @@ workspace**. Click a busy station or an agent to open its chat. Graph labels set
 when untouched, while activity stays animated. Rendering follows the monitor's
 native pixel density and browser refresh timing, including after moving between
 monitors. The app does not change Windows display settings.
+
+See [Windows validation](docs/desktop-validation.md) for repeatable native and packaged checks.
 
 ## Build
 

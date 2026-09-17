@@ -15,11 +15,14 @@ import {
   type SimulationNodeDatum,
 } from "d3-force";
 import type { Graph as GraphData, Note, Agent } from "../shared/types";
-import { colors, browser } from "./api";
+import { colors } from "./api";
 import { moveToward } from "./motion";
-
 type Node = Note &
-  SimulationNodeDatum & { radius: number; homeX: number; homeY: number };
+  SimulationNodeDatum & {
+    radius: number;
+    homeX: number;
+    homeY: number;
+  };
 type Station = {
   id: string;
   title: string;
@@ -29,7 +32,10 @@ type Station = {
   y: number;
   placed: boolean;
 };
-export type GraphControls = { fit: () => void; zoom: (factor: number) => void };
+export type GraphControls = {
+  fit: () => void;
+  zoom: (factor: number) => void;
+};
 type Props = {
   graph: GraphData;
   agents: Agent[];
@@ -52,7 +58,7 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
       map: new Map<string, Node>(),
       ordered: [] as Node[],
     });
-    const visible = useRef(!browser);
+    const visible = useRef(false);
     const layoutKey = useRef("");
     const invalidate = useRef(() => {});
     const stations = useRef<Station[]>([
@@ -107,12 +113,10 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
       if (!ns.length || v.width <= 100 || v.height <= 75) return;
       const xs = ns.map((n) => n.x || 0),
         ys = ns.map((n) => n.y || 0);
-      if (browser) {
-        positionStations();
-        for (const station of stations.current) {
-          xs.push(station.x - 55, station.x + 55);
-          ys.push(station.y + 45);
-        }
+      positionStations();
+      for (const station of stations.current) {
+        xs.push(station.x - 55, station.x + 55);
+        ys.push(station.y + 45);
       }
       const minX = Math.min(...xs),
         maxX = Math.max(...xs),
@@ -143,8 +147,7 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
         props.graph.nodes.map((n) => [n.id, n.domain]),
         props.graph.links,
       ]);
-      const retainLayout =
-        browser && nextLayoutKey === layoutKey.current && sim.current;
+      const retainLayout = nextLayoutKey === layoutKey.current && sim.current;
       layoutKey.current = nextLayoutKey;
       const domains = [...new Set(props.graph.nodes.map((n) => n.domain))];
       const degree = new Map<string, number>();
@@ -223,7 +226,7 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
         sim.current.stop().tick(100).restart();
         timer = setTimeout(fit, 150);
       }
-      if (browser && !visible.current) sim.current.stop();
+      if (!visible.current) sim.current.stop();
       invalidate.current();
       return () => clearTimeout(timer);
     }, [props.graph]);
@@ -242,7 +245,7 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
       const screen = c.getContext("2d")!;
       // The settled note network is one reusable raster. Live agents can move
       // over it without repainting every link and label on every frame.
-      const scene = browser ? sceneCanvas.current! : undefined;
+      const scene = sceneCanvas.current!;
       const sceneContext = scene?.getContext("2d");
       let ctx = screen;
       let sceneDirty = true;
@@ -251,12 +254,10 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
       const textWidths = new Map<string, number>();
       const requestDraw = (dirty = true) => {
         sceneDirty ||= dirty;
-        if (!frame && (!browser || visible.current))
-          frame = requestAnimationFrame(draw);
+        if (!frame && visible.current) frame = requestAnimationFrame(draw);
       };
       invalidate.current = requestDraw;
       const updateVisibility = () => {
-        if (!browser) return;
         visible.current =
           !document.hidden && c.clientWidth > 0 && c.clientHeight > 0;
         if (!visible.current) {
@@ -289,19 +290,31 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
       let down = { x: 0, y: 0 };
       let press = { x: 0, y: 0 };
       let hovered: string | undefined;
-      const orbPositions = new Map<string, { x: number; y: number }>();
+      const orbPositions = new Map<
+        string,
+        {
+          x: number;
+          y: number;
+        }
+      >();
       const connections = new Map<
         string,
-        { target: string; progress: number }
+        {
+          target: string;
+          progress: number;
+        }
       >();
-      let orbHits: { id: string; x: number; y: number }[] = [];
+      let orbHits: {
+        id: string;
+        x: number;
+        y: number;
+      }[] = [];
       const resize = new ResizeObserver(([entry]) => {
         updateVisibility();
         if (entry.contentRect.width <= 0 || entry.contentRect.height <= 0)
           return;
         const dpr = window.devicePixelRatio || 1;
         if (
-          browser &&
           view.current.width === entry.contentRect.width &&
           view.current.height === entry.contentRect.height &&
           c.width === Math.round(entry.contentRect.width * dpr) &&
@@ -333,13 +346,17 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
             n.radius + 10 / view.current.scale,
         );
       const hitStation = (p: { x: number; y: number }) =>
-        browser
-          ? stations.current.find(
-              (s) =>
-                Math.hypot(s.x - p.x, s.y - p.y) < 13 + 10 / view.current.scale,
-            )
-          : undefined;
-      const pointers = new Map<number, { x: number; y: number }>();
+        stations.current.find(
+          (s) =>
+            Math.hypot(s.x - p.x, s.y - p.y) < 13 + 10 / view.current.scale,
+        );
+      const pointers = new Map<
+        number,
+        {
+          x: number;
+          y: number;
+        }
+      >();
       let pinchDistance = 0;
       const distance = () => {
         const [a, b] = [...pointers.values()];
@@ -497,7 +514,7 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
       c.addEventListener("dblclick", dblclick);
       const draw = (time: number) => {
         frame = 0;
-        if (browser && !visible.current) return;
+        if (!visible.current) return;
         const v = view.current;
         const p = latest.current;
         const dpr = window.devicePixelRatio || 1;
@@ -534,21 +551,10 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
           sceneDirty = true;
         }
         ctx = sceneContext || screen;
-        if (!browser || sceneDirty || changing) {
+        if (sceneDirty || changing) {
           sceneDirty = false;
           ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
           ctx.clearRect(0, 0, v.width, v.height);
-          // A quiet star field gives the network depth without competing with the notes.
-          for (let i = 0; !browser && i < 65; i++) {
-            const x =
-              ((((Math.sin(i * 127.1) * 43758.5453) % 1) + 1) % 1) * v.width;
-            const y =
-              ((((Math.sin(i * 311.7) * 19341.315) % 1) + 1) % 1) * v.height;
-            ctx.fillStyle = `rgba(167,192,205,${0.035 + (Math.sin(t * 0.3 + i) + 1) * 0.018})`;
-            ctx.beginPath();
-            ctx.arc(x, y, i % 9 === 0 ? 1.2 : 0.65, 0, Math.PI * 2);
-            ctx.fill();
-          }
           ctx.save();
           ctx.translate(v.width / 2 + v.x, v.height / 2 + v.y);
           ctx.scale(v.scale, v.scale);
@@ -579,8 +585,12 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
             ctx.lineTo(b.x!, b.y!);
             ctx.stroke();
           }
-          const labelBoxes: { x: number; y: number; w: number; h: number }[] =
-            [];
+          const labelBoxes: {
+            x: number;
+            y: number;
+            w: number;
+            h: number;
+          }[] = [];
           for (let i = 0; i < ordered.length; i++) {
             const n = ordered[i];
             const color = colors[n.domain] || colors.knowledge;
@@ -588,29 +598,12 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
             const selected = n.id === focus;
             const x = n.x || 0,
               y = n.y || 0;
-            const pulse = browser ? 1 : 1 + Math.sin(t * 0.9 + i * 2) * 0.08;
             ctx.globalAlpha = match ? 1 : 0.13;
-            if (!browser) {
-              const glow = ctx.createRadialGradient(
-                x,
-                y,
-                0,
-                x,
-                y,
-                n.radius * (selected ? 6 : 4),
-              );
-              glow.addColorStop(0, color + (selected ? "45" : "22"));
-              glow.addColorStop(1, color + "00");
-              ctx.fillStyle = glow;
-              ctx.beginPath();
-              ctx.arc(x, y, n.radius * (selected ? 6 : 4), 0, Math.PI * 2);
-              ctx.fill();
-            }
             if (selected) {
               ctx.strokeStyle = color + "85";
               ctx.lineWidth = 1 / v.scale;
               ctx.beginPath();
-              ctx.arc(x, y, n.radius + 7 + pulse, 0, Math.PI * 2);
+              ctx.arc(x, y, n.radius + 8, 0, Math.PI * 2);
               ctx.stroke();
             }
             const changed = now - n.modified;
@@ -625,24 +618,9 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
               ctx.arc(x, y, n.radius + changed / 180, 0, Math.PI * 2);
               ctx.stroke();
             }
-            if (browser) {
-              ctx.fillStyle = color + (selected ? "e6" : "a6");
-            } else {
-              const ball = ctx.createRadialGradient(
-                x - n.radius * 0.3,
-                y - n.radius * 0.4,
-                0.1,
-                x,
-                y,
-                n.radius,
-              );
-              ball.addColorStop(0, "#e7f8f2");
-              ball.addColorStop(0.3, color);
-              ball.addColorStop(1, color + "85");
-              ctx.fillStyle = ball;
-            }
+            ctx.fillStyle = color + (selected ? "e6" : "a6");
             ctx.beginPath();
-            ctx.arc(x, y, n.radius * pulse, 0, Math.PI * 2);
+            ctx.arc(x, y, n.radius, 0, Math.PI * 2);
             ctx.fill();
             if (p.labels || selected || neighbors.has(n.id) || p.query) {
               const major = n.kind === "entry" || n.kind === "hub";
@@ -686,7 +664,7 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
             }
           }
           ctx.globalAlpha = 1;
-          if (browser) ctx.restore();
+          ctx.restore();
           // Paint once more when a file pulse expires so its last ring is not
           // retained in the otherwise settled scene.
           sceneDirty = changing;
@@ -703,56 +681,36 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
         const agents = p.agents.filter(
           (a) => a.active || now - a.updated < 15000,
         );
-        if (browser) positionStations();
-        const renderedStations = stations.current.map((station, i) =>
-          browser
-            ? station
-            : {
-                ...station,
-                ...world({ x: i ? v.width - 100 : 86, y: v.height - 58 }),
-              },
-        );
+        positionStations();
+        const renderedStations = stations.current;
         const stationFor = (a: Agent) =>
           renderedStations[a.action === "running" ? 0 : 1];
         for (const station of renderedStations) {
           const busy = agents.filter(
             (a) => a.active && !a.target && stationFor(a).id === station.id,
           );
-          if (busy.length && !browser)
-            orbHits.push({
-              id: busy[0].threadId,
-              x: station.x * v.scale + v.width / 2 + v.x,
-              y: station.y * v.scale + v.height / 2 + v.y,
-            });
           ctx.save();
           ctx.translate(station.x, station.y);
-          if (!browser) ctx.scale(1 / v.scale, 1 / v.scale);
-          ctx.fillStyle = browser ? "#0b131a" : "#101e25";
+          ctx.fillStyle = "#0b131a";
           ctx.strokeStyle = station.color + (busy.length ? "cc" : "45");
           ctx.shadowColor = station.color;
-          ctx.shadowBlur =
-            busy.length && !browser ? 18 + Math.sin(t * 2) * 4 : 0;
+          ctx.shadowBlur = 0;
           ctx.lineWidth = 1.3;
           ctx.beginPath();
-          if (browser) ctx.arc(0, 0, 13, 0, Math.PI * 2);
-          else ctx.roundRect(-25, -22, 50, 44, 13);
+          ctx.arc(0, 0, 13, 0, Math.PI * 2);
           ctx.fill();
           ctx.stroke();
           ctx.shadowBlur = 0;
           ctx.fillStyle = station.color;
-          ctx.font = `600 ${browser ? 11 : 17}px "DM Sans", sans-serif`;
+          ctx.font = '600 11px "DM Sans", sans-serif';
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.fillText(station.symbol, 0, -1);
           ctx.font = '500 11px "DM Sans", sans-serif';
-          ctx.fillText(station.title, 0, browser ? 27 : 35);
+          ctx.fillText(station.title, 0, 27);
           if (busy.length) {
             ctx.font = '400 10px "DM Sans", sans-serif';
-            ctx.fillText(
-              `${busy.length} active · ${busy[0].action}`,
-              0,
-              browser ? 42 : 50,
-            );
+            ctx.fillText(`${busy.length} active · ${busy[0].action}`, 0, 42);
           }
           ctx.restore();
         }
@@ -768,26 +726,9 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
           orbPositions.set(a.id, pos);
           const color = a.parentId ? "#c4acff" : "#b3ffe1";
           const radius = a.parentId ? 5 : 7;
-          if (!browser) {
-            const glow = ctx.createRadialGradient(
-              pos.x,
-              pos.y,
-              0,
-              pos.x,
-              pos.y,
-              33,
-            );
-            glow.addColorStop(0, color + "b0");
-            glow.addColorStop(0.23, color + "40");
-            glow.addColorStop(1, color + "00");
-            ctx.fillStyle = glow;
-            ctx.beginPath();
-            ctx.arc(pos.x, pos.y, 33, 0, Math.PI * 2);
-            ctx.fill();
-          }
           ctx.shadowColor = color;
-          ctx.shadowBlur = browser ? 0 : 16;
-          ctx.fillStyle = browser ? color : "#f3fff9";
+          ctx.shadowBlur = 0;
+          ctx.fillStyle = color;
           ctx.beginPath();
           ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
           ctx.fill();
@@ -808,16 +749,6 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
               x: pos.x + (target.x! - pos.x) * reach,
               y: pos.y + (target.y! - pos.y) * reach,
             };
-            if (!browser) {
-              ctx.strokeStyle = color + "60";
-              ctx.lineWidth = 4 / v.scale;
-              ctx.shadowColor = color;
-              ctx.shadowBlur = 12;
-              ctx.beginPath();
-              ctx.moveTo(pos.x, pos.y);
-              ctx.lineTo(end.x, end.y);
-              ctx.stroke();
-            }
             ctx.shadowBlur = 0;
             ctx.strokeStyle = color + "e0";
             ctx.lineWidth = 1.5 / v.scale;
@@ -860,7 +791,6 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
           }
         ctx.restore();
         if (
-          !browser ||
           changing ||
           agents.length ||
           v.scale !== v.targetScale ||
@@ -909,13 +839,7 @@ export const BrainGraph = forwardRef<GraphControls, Props>(
           ref={canvas}
           aria-label="Interactive knowledge graph. Drag notes or activity stations to move them, scroll to zoom, double-click to fit."
         />
-        {browser && (
-          <canvas
-            className="graph-scene"
-            ref={sceneCanvas}
-            aria-hidden="true"
-          />
-        )}
+        <canvas className="graph-scene" ref={sceneCanvas} aria-hidden="true" />
         <div className="graph-vignette" />
         {hover && (
           <div

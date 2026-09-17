@@ -1,8 +1,8 @@
 import { PwaControls } from "../browser/PwaControls";
 import { Scanner } from "../browser/Scanner";
-import { WorkspaceTools, BulkChats } from "../browser/WorkspaceTools";
-import { saveDrafts } from "../browser/bridge";
-import { RecentConversations } from "../browser/conversations";
+import { WorkspaceTools, BulkChats } from "./WorkspaceTools";
+import { saveDrafts } from "./client-state";
+import { RecentConversations } from "./conversations";
 import { useEffect, useRef, useState } from "react";
 import {
   Activity as ActivityIcon,
@@ -676,10 +676,10 @@ function Connect({
           )}
           {!browser && (
             <>
-              <label>Pairing invitation</label>
+              <label>Pairing code or invitation</label>
               <textarea
                 aria-label="Connection key"
-                placeholder="Paste from AgentView Host"
+                placeholder="Enter six digits or paste an invitation from AgentView Host"
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
                 rows={2}
@@ -779,12 +779,12 @@ function ClientApp() {
   const graph = useRef<GraphControls>(null);
   const threadRef = useRef(selectedThread);
   useEffect(() => {
-    if (browser) void saveDrafts(selectedThread).catch(() => {});
+    void saveDrafts(selectedThread).catch(() => {});
   }, [selectedThread]);
   threadRef.current = selectedThread;
   const recentPages = useRef(new RecentConversations());
   useEffect(() => {
-    if (!browser || !page) return;
+    if (!page) return;
     recentPages.current.set(page.thread.id, page);
   }, [page]);
   const readGeneration = useRef(0);
@@ -793,14 +793,14 @@ function ClientApp() {
   const readThread = async (id: string, more = false, refresh = false) => {
     const generation = ++readGeneration.current;
     if (!more) {
-      if (browser) threadRef.current = id;
+      threadRef.current = id;
       setSelectedThread(id);
       setPage((old) =>
         old?.thread.id === id ? old : recentPages.current.get(id),
       );
       setLoading(true);
     }
-    if (!browser || !refresh) {
+    if (!refresh) {
       setChatOpen(true);
       setPhoneView("chat");
       setDrawer(false);
@@ -827,7 +827,7 @@ function ClientApp() {
     } catch (e: any) {
       if (
         generation === readGeneration.current &&
-        !(browser && e.message === "Disconnected.")
+        e.message !== "Disconnected."
       )
         notify(e.message);
     } finally {
@@ -928,7 +928,7 @@ function ClientApp() {
             : old,
         );
       }
-      if (browser && event.type === "threadChanged")
+      if (event.type === "threadChanged")
         recentPages.current.delete(event.threadId);
       if (
         event.type === "threadChanged" &&
@@ -971,18 +971,10 @@ function ClientApp() {
           );
           return;
         }
-        if (browser) {
-          events.push(event);
-          if (!frame) frame = requestAnimationFrame(flush);
-          // A hidden browser may pause animation frames before disconnecting.
-          if (method === "turn/completed" || events.length >= 256) flush();
-        } else {
-          setPage((old) =>
-            old
-              ? { ...old, turns: applyConversationEvent(old.turns, method, p) }
-              : old,
-          );
-        }
+        events.push(event);
+        if (!frame) frame = requestAnimationFrame(flush);
+        // Hidden windows may pause animation frames.
+        if (method === "turn/completed" || events.length >= 256) flush();
         if (method === "turn/completed")
           void invoke("thread.read", { id: p.threadId })
             .then((result) => {
@@ -999,7 +991,7 @@ function ClientApp() {
           setSelectedThread(result.selectedThread);
         }
         if (result.snapshot) {
-          setSnapshot(result.snapshot);
+          onEvent({ type: "snapshot", snapshot: result.snapshot });
           setConnection("connected");
           setRoute(result.route || "local");
         }
@@ -1094,11 +1086,11 @@ function ClientApp() {
   };
   return (
     <div
-      className={`client-app ${browser ? "browser-app" : ""} phone-${phoneView} ${drawer ? "drawer-open" : ""}`}
+      className={`client-app workspace-client ${browser ? "browser-app" : "desktop-app"} phone-${phoneView} ${drawer ? "drawer-open" : ""}`}
     >
       <WindowBar />
       {browser && <PwaControls selectedThread={selectedThread} />}
-      {browser && snapshot && !connected && connectionError && (
+      {snapshot && !connected && connectionError && (
         <div className="pwa-error" role="status">
           <span>{connectionError}</span>
           {connection === "error" && (
@@ -1333,7 +1325,7 @@ function ClientApp() {
                 </div>
               </div>
               <div className="thread-list">
-                {browser && snapshot.capabilities && (
+                {snapshot.capabilities && (
                   <BulkChats
                     threads={threads}
                     onError={notify}
@@ -1645,7 +1637,7 @@ function ClientApp() {
                     a.threadId === currentThread?.id &&
                     a.action === "auto-approved",
                 )}
-                expanded={browser && Boolean(snapshot.capabilities)}
+                expanded={Boolean(snapshot.capabilities)}
                 onboarding={snapshot.preferences?.onboarding}
                 onCleared={newChat}
                 thread={currentThread}
@@ -1731,7 +1723,7 @@ function ClientApp() {
                 onChange={(e) => setMotion(e.target.checked)}
               />
             </label>
-            {browser && snapshot?.capabilities && (
+            {snapshot?.capabilities && (
               <WorkspaceTools
                 projects={snapshot.projects}
                 onError={notify}

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { RecentConversations } from "../src/browser/conversations";
+import { RecentConversations } from "../src/ui/conversations";
 import type { ChatPage } from "../src/shared/types";
 
 const page = (id: string, text = "short"): ChatPage => ({

@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, type RefObject } from "react";
 
 // The visible chat viewport already accounts for the keyboard and safe areas.
 // Measure its remaining space instead of guessing a fraction of the screen.
-export function useBrowserComposer(
+export function useComposer(
   input: RefObject<HTMLTextAreaElement | null>,
   follow: RefObject<boolean>,
   enabled: boolean,

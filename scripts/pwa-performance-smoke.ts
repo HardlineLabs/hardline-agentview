@@ -131,9 +131,11 @@ export async function longConversationSmoke(page: Page, host: HostService) {
     const baselineP95 = await typingLatency(page);
     await page.getByLabel("Message your agent").fill("");
     await host.refreshThreads();
-    await page
-      .getByRole("button", { name: "Open conversations", exact: true })
-      .click();
+    const drawer = page.getByRole("button", {
+      name: "Open conversations",
+      exact: true,
+    });
+    if (await drawer.isVisible()) await drawer.click();
     const opened = Date.now();
     await page
       .locator(".thread-list button")

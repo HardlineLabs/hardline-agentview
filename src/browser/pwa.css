@@ -32,7 +32,7 @@
   transform: translateY(var(--app-top, 0px));
   overflow: hidden;
 }
-.browser-app {
+.workspace-client {
   background: #05090d;
   height: 100%;
   min-height: 0;
@@ -46,112 +46,112 @@
 }
 /* Quiet surfaces keep the existing domain colors and blue accents legible.
    Flat graph controls avoid repeatedly compositing blur over a moving canvas. */
-.browser-app .brain-panel {
+.workspace-client .brain-panel {
   background: #030609;
 }
-.browser-app .chat-panel {
+.workspace-client .chat-panel {
   background: #080e13;
 }
-.browser-app .sidebar,
-.browser-app .app-header,
-.browser-app .mobile-header {
+.workspace-client .sidebar,
+.workspace-client .app-header,
+.workspace-client .mobile-header {
   background: #0a1118;
 }
-.browser-app .graph-vignette {
+.workspace-client .graph-vignette {
   display: none;
 }
-.browser-app .graph-surface > canvas:not(.graph-scene) {
+.workspace-client .graph-surface > canvas:not(.graph-scene) {
   position: relative;
   z-index: 1;
 }
-.browser-app .graph-surface > .graph-scene {
+.workspace-client .graph-surface > .graph-scene {
   position: absolute;
   inset: 0;
   pointer-events: none;
 }
-.browser-app .brain-panel::after {
+.workspace-client .brain-panel::after {
   display: none;
 }
-.browser-app .graph-controls,
-.browser-app .graph-tooltip {
+.workspace-client .graph-controls,
+.workspace-client .graph-tooltip {
   background: #101a23;
   border-color: #88b8df26;
   backdrop-filter: none;
   box-shadow: none;
 }
-.browser-app .graph-controls button.enabled {
+.workspace-client .graph-controls button.enabled {
   color: #9ccbf1;
 }
-.browser-app .graph-domains button.chosen {
+.workspace-client .graph-domains button.chosen {
   background: #82b5df14;
   color: #cadce9;
 }
-.browser-app .graph-bottom {
+.workspace-client .graph-bottom {
   background: none;
 }
-.browser-app .moment-orb,
-.browser-app .moment-orb.busy {
+.workspace-client .moment-orb,
+.workspace-client .moment-orb.busy {
   width: 9px;
   height: 9px;
   background: #739eb6;
   box-shadow: none;
   animation: none;
 }
-.browser-app .moment-orb.busy {
+.workspace-client .moment-orb.busy {
   background: #a7dfca;
 }
-.browser-app .brain-top h1 {
+.workspace-client .brain-top h1 {
   color: #d6e3ed;
 }
-.browser-app .graph-moment strong {
+.workspace-client .graph-moment strong {
   color: #a8c0d2;
 }
-.pwa-keyboard .browser-app {
+.pwa-keyboard .workspace-client {
   padding-bottom: 0;
 }
-.browser-app .workspace,
-.browser-app .chat-panel {
+.workspace-client .workspace,
+.workspace-client .chat-panel {
   min-height: 0;
   min-width: 0;
   overflow: hidden;
 }
-.browser-app .chat-scroll,
-.browser-app .composer textarea,
-.browser-app .connect-page,
-.browser-app .sidebar,
-.browser-app .thread-list,
-.browser-app .settings-modal,
-.browser-app .install-card,
-.browser-app .palette-results,
-.browser-app .note-body,
-.browser-app .activity-drawer {
+.workspace-client .chat-scroll,
+.workspace-client .composer textarea,
+.workspace-client .connect-page,
+.workspace-client .sidebar,
+.workspace-client .thread-list,
+.workspace-client .settings-modal,
+.workspace-client .install-card,
+.workspace-client .palette-results,
+.workspace-client .note-body,
+.workspace-client .activity-drawer {
   overscroll-behavior: contain;
 }
-.browser-app pre {
+.workspace-client pre {
   overscroll-behavior-x: contain;
 }
-.browser-app .chat-scroll {
+.workspace-client .chat-scroll {
   scroll-behavior: auto;
   overflow-x: hidden;
   overflow-wrap: anywhere;
 }
-.browser-app .composer-area {
+.workspace-client .composer-area {
   flex: 0 0 auto;
   min-height: 0;
   max-height: 100%;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
-.browser-app .chat-panel {
+.workspace-client .chat-panel {
   position: relative;
 }
-.browser-app .composer,
-.browser-app .composer:focus-within {
+.workspace-client .composer,
+.workspace-client .composer:focus-within {
   border: 0;
   background: transparent;
   box-shadow: none;
 }
-.browser-app .composer-draft {
+.workspace-client .composer-draft {
   display: block;
   overflow: hidden;
   border: 1px solid #b7d3d326;
@@ -161,10 +161,10 @@
   margin-bottom: 4px;
   transform-origin: center bottom;
 }
-.browser-app .composer-draft:focus-within {
+.workspace-client .composer-draft:focus-within {
   border-color: #b8e1c84d;
 }
-.browser-app .composer-flight {
+.workspace-client .composer-flight {
   position: absolute;
   z-index: 5;
   pointer-events: none;
@@ -181,8 +181,8 @@
   box-shadow: 0 10px 24px #0003;
   transform-origin: center bottom;
 }
-.browser-app .composer-draft.composer-steering,
-.browser-app .composer-flight.composer-steering {
+.workspace-client .composer-draft.composer-steering,
+.workspace-client .composer-flight.composer-steering {
   /* Match the pending steering message, including while the draft is focused. */
   opacity: 0.7;
   border: 1px dashed currentColor;
@@ -191,68 +191,71 @@
   color: #c6d5d9;
   box-shadow: none;
 }
-.browser-app .composer textarea {
+.workspace-client .composer textarea {
   display: block;
   resize: none;
 }
-.browser-app .composer-steering textarea {
+.workspace-client .composer-steering textarea {
   color: inherit;
 }
-.browser-app .message-attachments {
+.workspace-client .message-attachments {
   max-height: 100px;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
-.browser-app .rename-chat,
-.browser-app .recovery-card,
-.browser-app .clear-confirm {
+.workspace-client .rename-chat,
+.workspace-client .recovery-card,
+.workspace-client .clear-confirm {
   flex-shrink: 0;
   max-height: 35%;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
-.browser-app .model-controls {
+.workspace-client .model-controls {
   flex: 1;
   overflow: hidden;
 }
-.browser-app .model-controls select {
+.workspace-client .model-controls select {
   min-width: 0;
 }
-.browser-app .modal-backdrop {
+.workspace-client .modal-backdrop {
   position: absolute;
   inset: 0;
   padding: 12px;
   padding-top: max(12px, env(safe-area-inset-top, 0px));
   padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
 }
-.pwa-keyboard .browser-app .modal-backdrop {
+.pwa-keyboard .workspace-client .modal-backdrop {
   padding-bottom: 12px;
 }
-.browser-app .settings-modal,
-.browser-app .install-card,
-.browser-app .command-palette {
+.workspace-client .settings-modal,
+.workspace-client .install-card,
+.workspace-client .command-palette {
   max-height: 100%;
   min-height: 0;
 }
-.browser-app .command-palette {
+.workspace-client .command-palette {
   display: flex;
   flex-direction: column;
 }
-.browser-app .palette-input {
+.workspace-client .palette-input {
   flex-shrink: 0;
 }
-.browser-app .palette-input input {
+.workspace-client .palette-input input {
   min-width: 0;
 }
-.browser-app .palette-results {
+.workspace-client .palette-results {
   min-height: 0;
 }
-.browser-app .scanner-backdrop {
+.workspace-client .scanner-backdrop {
   position: absolute;
   overscroll-behavior: contain;
 }
 .browser-app .window-bar {
   display: none;
+}
+.desktop-app .window-bar {
+  display: flex;
 }
 .pwa-bar {
   flex: 0 0 auto;
@@ -291,7 +294,7 @@
 .pwa-error button {
   margin-left: auto;
 }
-.browser-app .connect-page {
+.workspace-client .connect-page {
   min-height: 0;
   overflow-y: auto;
 }
@@ -303,21 +306,21 @@
   margin-bottom: 14px;
   font-size: 14px;
 }
-.browser-app .connect-copy > p {
+.workspace-client .connect-copy > p {
   max-width: 34rem;
 }
-.browser-app .connect-copy form > label {
+.workspace-client .connect-copy form > label {
   display: block;
   margin: 8px 0;
 }
-.browser-app .connect-copy textarea {
+.workspace-client .connect-copy textarea {
   resize: vertical;
 }
-.browser-app .connect-copy details input {
+.workspace-client .connect-copy details input {
   margin: 12px 0;
   width: 100%;
 }
-.browser-app .connect-copy > .pairing-storage-note {
+.workspace-client .connect-copy > .pairing-storage-note {
   font-size: 12px;
   color: #a1b3b5;
   line-height: 1.6;
@@ -431,36 +434,36 @@
   color: #bac8cb;
 }
 @media (max-width: 760px), (pointer: coarse) and (max-width: 1024px) {
-  .browser-app .composer-draft.composer-steering,
-  .browser-app .composer-flight.composer-steering {
+  .workspace-client .composer-draft.composer-steering,
+  .workspace-client .composer-flight.composer-steering {
     border-radius: 16px 16px 4px 16px;
   }
-  .browser-app .connect-page {
+  .workspace-client .connect-page {
     padding: 24px 24px 32px;
     justify-content: flex-start;
   }
-  .browser-app .connect-art {
+  .workspace-client .connect-art {
     display: none;
   }
-  .browser-app .connect-copy h1 {
+  .workspace-client .connect-copy h1 {
     font-size: 34px;
   }
-  .browser-app .connect-copy > p {
+  .workspace-client .connect-copy > p {
     font-size: 15px;
     line-height: 1.6;
   }
-  .browser-app .pwa-bar {
+  .workspace-client .pwa-bar {
     padding: 6px 12px;
   }
-  .browser-app .pwa-bar > span {
+  .workspace-client .pwa-bar > span {
     font-size: 12px;
   }
-  .browser-app .chat-panel {
+  .workspace-client .chat-panel {
     min-height: 0;
   }
 }
 @media (max-height: 550px) {
-  .browser-app .connect-art {
+  .workspace-client .connect-art {
     display: none;
   }
 }
@@ -468,7 +471,7 @@
 .web-pairing-icon {
   display: none;
 }
-.browser-app .settings-modal {
+.workspace-client .settings-modal {
   overflow-y: auto;
 }
 .workspace-tools {
@@ -599,7 +602,7 @@
 .bulk-list span {
   overflow-wrap: anywhere;
 }
-.browser-app .chat-management {
+.workspace-client .chat-management {
   flex-wrap: wrap;
 }
 .rename-chat,
@@ -669,63 +672,63 @@
   height: 18px;
 }
 @media (max-width: 760px), (pointer: coarse) and (max-width: 1024px) {
-  .browser-app .sidebar {
+  .workspace-client .sidebar {
     top: 0;
     bottom: 0;
     padding-top: max(20px, env(safe-area-inset-top, 0px));
     padding-bottom: max(14px, env(safe-area-inset-bottom, 0px));
     overflow-y: auto;
   }
-  .browser-app .sidebar > * {
+  .workspace-client .sidebar > * {
     flex-shrink: 0;
   }
-  .browser-app .sidebar .thread-list {
+  .workspace-client .sidebar .thread-list {
     flex: 1 0 auto;
     overflow: visible;
   }
-  .pwa-compact .browser-app .app-header {
+  .pwa-compact .workspace-client .app-header {
     height: 44px;
   }
-  .pwa-compact .browser-app .chat-heading,
-  .pwa-compact .browser-app .composer-foot {
+  .pwa-compact .workspace-client .chat-heading,
+  .pwa-compact .workspace-client .composer-foot {
     display: none;
   }
-  .pwa-compact .browser-app .mobile-live {
+  .pwa-compact .workspace-client .mobile-live {
     min-height: 29px;
   }
-  .pwa-compact .browser-app .chat-scroll {
+  .pwa-compact .workspace-client .chat-scroll {
     padding: 10px 14px;
   }
-  .pwa-compact .browser-app .context-usage {
+  .pwa-compact .workspace-client .context-usage {
     flex-shrink: 0;
     padding: 5px 14px;
   }
-  .pwa-compact .browser-app .context-usage small {
+  .pwa-compact .workspace-client .context-usage small {
     display: none;
   }
-  .pwa-compact .browser-app .branch-hint {
+  .pwa-compact .workspace-client .branch-hint {
     padding: 2px 0;
     margin-bottom: 5px;
   }
-  .pwa-compact .browser-app .composer textarea {
+  .pwa-compact .workspace-client .composer textarea {
     min-height: 36px;
     max-height: none;
     padding-top: 8px;
   }
-  .pwa-compact .browser-app .chat-management {
+  .pwa-compact .workspace-client .chat-management {
     flex-wrap: nowrap;
     overflow-x: auto;
     gap: 8px;
     padding: 4px 12px;
     flex-shrink: 0;
   }
-  .pwa-compact .browser-app .chat-management button {
+  .pwa-compact .workspace-client .chat-management button {
     flex-shrink: 0;
   }
-  .pwa-compact .browser-app .pwa-bar > span {
+  .pwa-compact .workspace-client .pwa-bar > span {
     display: none;
   }
-  .pwa-compact .browser-app .pwa-bar {
+  .pwa-compact .workspace-client .pwa-bar {
     justify-content: flex-end;
     padding: 2px 12px;
   }
@@ -733,28 +736,28 @@
     display: block;
     margin-bottom: 20px;
   }
-  .browser-app .connect-copy form {
+  .workspace-client .connect-copy form {
     margin-top: 22px;
   }
-  .browser-app input,
-  .browser-app textarea,
-  .browser-app select {
+  .workspace-client input,
+  .workspace-client textarea,
+  .workspace-client select {
     font-size: 16px;
   }
-  .browser-app .connect-copy form > label {
+  .workspace-client .connect-copy form > label {
     font-size: 14px;
   }
-  .browser-app .connect-copy form details {
+  .workspace-client .connect-copy form details {
     font-size: 13px;
   }
-  .browser-app .connect-copy h1 {
+  .workspace-client .connect-copy h1 {
     margin: 12px 0;
     font-size: 32px;
   }
-  .browser-app .connect-copy > .pairing-storage-note {
+  .workspace-client .connect-copy > .pairing-storage-note {
     font-size: 12px;
   }
-  .browser-app .connect-foot {
+  .workspace-client .connect-foot {
     font-size: 12px;
   }
 }
@@ -771,14 +774,14 @@
   /* Use an explicit viewport height; stretching to bottom: 0 can end short. */
   height: 100vh;
 }
-.browser-app .context-compact {
+.workspace-client .context-compact {
   flex: 0 0 auto;
   position: relative;
   border-bottom: 1px solid var(--line);
   color: #9eb6b7;
   font-size: 11px;
 }
-.browser-app .context-compact summary {
+.workspace-client .context-compact summary {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -787,21 +790,21 @@
   cursor: pointer;
   list-style: none;
 }
-.browser-app .context-compact summary::-webkit-details-marker {
+.workspace-client .context-compact summary::-webkit-details-marker {
   display: none;
 }
-.browser-app .context-compact summary::after {
+.workspace-client .context-compact summary::after {
   content: "\25be";
 }
-.browser-app .context-compact[open] summary::after {
+.workspace-client .context-compact[open] summary::after {
   content: "\25b4";
 }
-.browser-app .context-compact meter {
+.workspace-client .context-compact meter {
   flex: 1;
   height: 4px;
   margin: 0;
 }
-.browser-app .context-compact > div {
+.workspace-client .context-compact > div {
   position: absolute;
   z-index: 30;
   left: 10px;
@@ -815,14 +818,14 @@
   max-height: min(200px, 35vh);
   overflow-y: auto;
 }
-.browser-app .context-compact p {
+.workspace-client .context-compact p {
   margin: 4px 0;
   line-height: 1.5;
 }
-.browser-app .context-compact .usage-high {
+.workspace-client .context-compact .usage-high {
   color: #d9c491;
 }
-.browser-app .conversation-updating {
+.workspace-client .conversation-updating {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -831,7 +834,7 @@
   font-size: 11px;
   color: #9cbab2;
 }
-.browser-app .choice-trigger {
+.workspace-client .choice-trigger {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -843,15 +846,15 @@
   background: transparent;
   font-size: 12px;
 }
-.browser-app .choice-trigger span {
+.workspace-client .choice-trigger span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.browser-app .choice-trigger svg {
+.workspace-client .choice-trigger svg {
   flex-shrink: 0;
 }
-.browser-app .choice-backdrop {
+.workspace-client .choice-backdrop {
   position: absolute;
   inset: 0;
   z-index: 1200;
@@ -862,7 +865,7 @@
   padding-bottom: max(12px, env(safe-area-inset-bottom));
   background: #03080baa;
 }
-.browser-app .choice-dialog {
+.workspace-client .choice-dialog {
   width: min(440px, 100%);
   max-height: calc(100% - 16px);
   display: flex;
@@ -872,23 +875,23 @@
   background: #142128;
   box-shadow: 0 20px 80px #0008;
 }
-.browser-app .choice-dialog header {
+.workspace-client .choice-dialog header {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px 8px 18px;
 }
-.browser-app .choice-dialog header button {
+.workspace-client .choice-dialog header button {
   min-height: 44px;
   min-width: 44px;
 }
-.browser-app .choice-dialog [role="listbox"] {
+.workspace-client .choice-dialog [role="listbox"] {
   padding: 0 8px 8px;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
-.browser-app .choice-dialog [role="option"] {
+.workspace-client .choice-dialog [role="option"] {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -900,84 +903,92 @@
   font-size: 16px;
   border-radius: 10px;
 }
-.browser-app .choice-dialog [aria-selected="true"] {
+.workspace-client .choice-dialog [aria-selected="true"] {
   background: #a8ddc51b;
 }
-.browser-app .composer textarea {
+.workspace-client .composer textarea {
   min-height: 36px;
   max-height: none;
   padding: 8px 12px 4px;
   line-height: 1.5;
 }
 @media (max-width: 760px), (pointer: coarse) and (max-width: 1024px) {
-  .browser-app .app-header {
+  .workspace-client .app-header {
     height: 48px;
   }
-  .browser-app > .pwa-bar {
+  .workspace-client > .pwa-bar {
     margin-top: calc(-1 * var(--pwa-top-space));
     padding-top: calc(8px + var(--pwa-top-space));
   }
-  .browser-app:not(:has(> .pwa-bar)):not(:has(> .pwa-error)) > .app-header {
+  .workspace-client:not(:has(> .pwa-bar)):not(:has(> .pwa-error))
+    > .app-header {
     /* Paint the header into the notch area; keep its controls below it. */
     margin-top: calc(-1 * var(--pwa-top-space));
     padding-top: var(--pwa-top-space);
     height: calc(48px + var(--pwa-top-space));
   }
   .pwa-compact
-    .browser-app:not(:has(> .pwa-bar)):not(:has(> .pwa-error))
+    .workspace-client:not(:has(> .pwa-bar)):not(:has(> .pwa-error))
     > .app-header {
     height: calc(44px + var(--pwa-top-space));
   }
-  .browser-app .mobile-live {
+  .workspace-client .mobile-live {
     min-height: 30px;
     padding-top: 4px;
     padding-bottom: 4px;
   }
-  .browser-app .chat-heading {
+  .workspace-client .chat-heading {
     height: 46px;
     min-height: 46px;
     padding: 0 14px;
   }
-  .browser-app .chat-heading .eyebrow {
+  .workspace-client .chat-heading .eyebrow {
     display: none;
   }
-  .browser-app .chat-management {
+  .workspace-client .chat-management {
     flex-wrap: nowrap;
     overflow-x: auto;
     padding: 3px 12px;
     gap: 12px;
     min-height: 34px;
   }
-  .browser-app .chat-management button {
+  .workspace-client .chat-management button {
     flex-shrink: 0;
     min-height: 30px;
   }
-  .browser-app .composer-area {
+  .workspace-client .composer-area {
     /* Extend the surface, not the buttons, into the home-indicator area. */
     padding: 5px 10px max(4px, var(--pwa-bottom-space));
   }
-  .browser-app.phone-chat:has(.chat-panel) {
+  .workspace-client.phone-chat:has(.chat-panel) {
     padding-bottom: 0;
   }
-  .browser-app .composer-bottom {
+  .workspace-client .composer-bottom {
     padding: 0 6px 5px;
     gap: 4px;
   }
-  .browser-app .composer-foot {
+  .workspace-client .composer-foot {
     display: none;
   }
-  .browser-app .model-controls {
+  .workspace-client .model-controls {
     max-width: none;
   }
-  .browser-app .choice-trigger:first-child {
+  .workspace-client .choice-trigger:first-child {
     flex: 1;
   }
-  .pwa-compact .browser-app .composer textarea {
+  .pwa-compact .workspace-client .composer textarea {
     min-height: 36px;
     max-height: none;
     padding-top: 8px;
   }
-  .pwa-keyboard .browser-app .pwa-bar {
+  .pwa-keyboard .workspace-client .pwa-bar {
     display: none;
   }
+}
+
+/* Native title bar remains part of the desktop grid. */
+.desktop-app {
+  height: 100dvh;
+  --pwa-top-space: 0px;
+  --pwa-bottom-space: 0px;
 }

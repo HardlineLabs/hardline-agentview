@@ -19,18 +19,18 @@ type Props = {
   follow: RefObject<boolean>;
   Item: ComponentType<{ item: ChatItem; lazy?: boolean }>;
 };
-export const BrowserToolState = createContext<Set<string> | null>(null);
+export const ToolState = createContext<Set<string> | null>(null);
 
 // Keep ordinary short chats in document flow; virtualize individual items, since
 // a single agent turn can contain thousands of messages and tool calls.
-export const BrowserTranscript = memo(function BrowserTranscript(props: Props) {
+export const ConversationTranscript = memo(function ConversationTranscript(props: Props) {
   const count = props.turns.reduce((sum, turn) => sum + turn.items.length, 0);
   const [virtual, setVirtual] = useState(count > 80);
   const [expanded] = useState(() => new Set<string>());
   if (count > 80 && !virtual) setVirtual(true);
   const Item = props.Item;
   return (
-    <BrowserToolState.Provider value={expanded}>
+    <ToolState.Provider value={expanded}>
       {virtual || count > 80 ? (
         <VirtualTranscript {...props} />
       ) : (
@@ -47,7 +47,7 @@ export const BrowserTranscript = memo(function BrowserTranscript(props: Props) {
           ))}
         </>
       )}
-    </BrowserToolState.Provider>
+    </ToolState.Provider>
   );
 });
 
