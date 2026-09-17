@@ -20,8 +20,18 @@ its indexed identifier; clients cannot request arbitrary filesystem paths.
 
 The client holds the visible graph and conversation content in memory. It does
 not clone the vault or repositories. Its remembered connection is encrypted with
-Electron safeStorage on Windows. Ordinary OS paging and screen capture are outside
-this storage boundary.
+Electron safeStorage on Windows. Drafts, attachment previews, the selected chat and
+up to 50 outgoing action receipts use the same Windows protection, with atomic
+ciphertext replacement and a 16 MB saved-state limit. These are isolated by Host
+identity and cleared on disconnect. Conversation transcripts stay in memory.
+Ordinary OS paging and screen capture are outside this storage boundary.
+
+Shared React components under `src/ui` own transcript virtualization, composer,
+workspace tools, recent-chat cache and client state. Browser IndexedDB and native
+Electron IPC provide platform storage; both clients share receipt reconciliation.
+The native main process retains credentials and transport. Reloading its renderer
+requests a fresh Host snapshot without interrupting running work. Windows notices
+are opt-in and require the client to remain open; web push uses its service worker.
 
 ## Connection
 

@@ -1,5 +1,5 @@
 import { memo, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { BrowserTranscript, BrowserToolState } from "../browser/Transcript";
+import { ConversationTranscript, ToolState } from "./Transcript";
 import {
   ArrowUp,
   Square,
@@ -20,8 +20,8 @@ import {
   ArchiveRestore,
   Trash2,
 } from "lucide-react";
-import { ChoicePicker } from "../browser/ChoicePicker";
-import { useBrowserComposer } from "../browser/composer";
+import { ChoicePicker } from "./ChoicePicker";
+import { useComposer } from "./composer";
 import { ContextUsage } from "./Usage";
 import { ElicitationFields } from "./ElicitationFields";
 import {
@@ -30,13 +30,13 @@ import {
 } from "../shared/elicitation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { invoke, browser } from "./api";
+import { invoke } from "./api";
 import {
-  browserDrafts,
-  browserAttachments,
+  drafts as clientDrafts,
+  attachments as attachmentsState,
   saveDrafts,
   type Attachment,
-} from "../browser/bridge";
+} from "./client-state";
 import type {
   Approval,
   ChatItem,
@@ -47,7 +47,6 @@ import type {
   Thread,
   Turn,
 } from "../shared/types";
-
 export function Markdown({ text }: { text: string }) {
   return (
     <ReactMarkdown
@@ -74,7 +73,7 @@ export function Markdown({ text }: { text: string }) {
   );
 }
 function Item({ item, lazy = false }: { item: ChatItem; lazy?: boolean }) {
-  const expanded = useContext(BrowserToolState);
+  const expanded = useContext(ToolState);
   const [open, setOpen] = useState(() => Boolean(expanded?.has(item.id)));
   if (item.type === "userMessage") {
     const text =
@@ -159,7 +158,7 @@ function Item({ item, lazy = false }: { item: ChatItem; lazy?: boolean }) {
     </details>
   );
 }
-const BrowserItem = memo(Item);
+const ConversationItem = memo(Item);
 const emptyTurns: Turn[] = [];
 function ApprovalCard({
   approval,
@@ -187,7 +186,10 @@ function ApprovalCard({
     | {
         id: string;
         question: string;
-        options?: { label: string; description?: string }[];
+        options?: {
+          label: string;
+          description?: string;
+        }[];
       }[]
     | undefined;
   const respond = async (allow: boolean) => {
@@ -321,7 +323,11 @@ type Props = {
   autoApproveSupported?: boolean;
   autoApproveEnabled?: boolean;
   fullAccess?: boolean;
-  approvalActivity?: { id: string; detail: string; time: number }[];
+  approvalActivity?: {
+    id: string;
+    detail: string;
+    time: number;
+  }[];
   expanded?: boolean;
   onboarding?: string;
   thread?: Thread;
@@ -352,10 +358,10 @@ export function Chat(props: Props) {
   const [queueMode, setQueueMode] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const persist = () => {
-    if (browser) void saveDrafts().catch((e) => props.onError(e.message));
+    void saveDrafts().catch((e) => props.onError(e.message));
   };
   const [text, setText] = useState("");
-  const drafts = useRef(browser ? browserDrafts : new Map<string, string>());
+  const drafts = useRef(clientDrafts);
   const [sending, setSending] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [approvalBusy, setApprovalBusy] = useState(false);
@@ -371,7 +377,15 @@ export function Chat(props: Props) {
   >([]);
   const [model, setModel] = useState("");
   const [effort, setEffort] = useState("high");
-  const choices = useRef(new Map<string, { model: string; effort: string }>());
+  const choices = useRef(
+    new Map<
+      string,
+      {
+        model: string;
+        effort: string;
+      }
+    >(),
+  );
   const [projectId, setProjectId] = useState("vault");
   const scroll = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
@@ -411,9 +425,7 @@ export function Chat(props: Props) {
   }, [props.thread?.id, props.thread?.model, props.thread?.reasoningEffort]);
   useEffect(() => {
     setText(drafts.current.get(props.thread?.id || "new") || "");
-    setAttachments(
-      browser ? browserAttachments.get(props.thread?.id || "new") || [] : [],
-    );
+    setAttachments(attachmentsState.get(props.thread?.id || "new") || []);
     setRename(undefined);
     setRenamed(undefined);
     setRecovery(undefined);
@@ -446,7 +458,7 @@ export function Chat(props: Props) {
       scroll.current.scrollTop = scroll.current.scrollHeight;
   }, [props.page, sending, steering]);
   useEffect(() => {
-    if (!browser || !scroll.current) return;
+    if (!scroll.current) return;
     const panel = scroll.current;
     const observer = new ResizeObserver(() => {
       // Keep the latest message above the keyboard, unless reading history.
@@ -456,13 +468,7 @@ export function Chat(props: Props) {
     observer.observe(panel);
     return () => observer.disconnect();
   }, []);
-  const animateSend = useBrowserComposer(
-    input,
-    follow,
-    browser,
-    text,
-    props.thread?.id,
-  );
+  const animateSend = useComposer(input, follow, true, text, props.thread?.id);
   const send = async (onboardingText?: string) => {
     const outgoingText = onboardingText ?? text;
     if (
@@ -528,7 +534,7 @@ export function Chat(props: Props) {
           ),
         );
       drafts.current.delete(draftId);
-      browserAttachments.delete(draftId);
+      attachmentsState.delete(draftId);
       persist();
       if (currentChat.current !== draftId) return;
       if (!onboardingText) animateSend(isSteering);
@@ -564,7 +570,7 @@ export function Chat(props: Props) {
       props.onError(e.message);
     } finally {
       setSending(false);
-      if (!browser) input.current?.focus();
+      if (import.meta.env.MODE !== "pwa") input.current?.focus();
       else if (
         currentChat.current === draftId &&
         input.current
@@ -635,7 +641,7 @@ export function Chat(props: Props) {
           ...uploaded,
           preview: file.type.startsWith("image/") ? dataUrl : undefined,
         });
-        browserAttachments.set(key, [...next]);
+        attachmentsState.set(key, [...next]);
         if (currentChat.current === key) setAttachments([...next]);
         persist();
       }
@@ -862,31 +868,17 @@ export function Chat(props: Props) {
               </button>
             </div>
           )}
-          <ContextUsage usage={props.thread.usage} compact={browser} />
+          <ContextUsage usage={props.thread.usage} compact={true} />
         </>
       )}
       <div
         className="chat-scroll"
         ref={scroll}
-        onScrollCapture={
-          browser
-            ? () => {
-                // Record bottom-follow intent before virtual rows measure new heights.
-                const e = scroll.current!;
-                follow.current =
-                  e.scrollHeight - e.scrollTop - e.clientHeight < 90;
-              }
-            : undefined
-        }
-        onScroll={
-          browser
-            ? undefined
-            : () => {
-                const e = scroll.current!;
-                follow.current =
-                  e.scrollHeight - e.scrollTop - e.clientHeight < 90;
-              }
-        }
+        onScrollCapture={() => {
+          // Record bottom-follow intent before virtual rows measure new heights.
+          const e = scroll.current!;
+          follow.current = e.scrollHeight - e.scrollTop - e.clientHeight < 90;
+        }}
       >
         {Boolean(props.approvalActivity?.length) && (
           <details className="auto-approve-history">
@@ -906,7 +898,7 @@ export function Chat(props: Props) {
             </ul>
           </details>
         )}
-        {props.loading && (!browser || !props.page) ? (
+        {props.loading && !props.page ? (
           <div className="chat-loading">
             <LoaderCircle className="spin" size={18} /> Opening conversation
           </div>
@@ -962,27 +954,14 @@ export function Chat(props: Props) {
                 <ArrowLeft size={12} /> Earlier messages
               </button>
             )}
-            {browser ? (
-              <BrowserTranscript
-                key={props.thread.id}
-                hasEarlier={Boolean(props.page?.nextCursor)}
-                turns={props.page?.turns || emptyTurns}
-                scroll={scroll}
-                follow={follow}
-                Item={BrowserItem}
-              />
-            ) : (
-              props.page?.turns.map((turn) => (
-                <div className="turn" key={turn.id}>
-                  {turn.items.map((item) => (
-                    <Item item={item} key={item.id} />
-                  ))}
-                  {turn.error && (
-                    <div className="inline-error">{turn.error.message}</div>
-                  )}
-                </div>
-              ))
-            )}
+            <ConversationTranscript
+              key={props.thread.id}
+              hasEarlier={Boolean(props.page?.nextCursor)}
+              turns={props.page?.turns || emptyTurns}
+              scroll={scroll}
+              follow={follow}
+              Item={ConversationItem}
+            />
             {!props.page?.turns.length && !props.page?.historyPending && (
               <p className="muted empty-history">
                 The conversation is ready for your first message.
@@ -1030,7 +1009,7 @@ export function Chat(props: Props) {
             <LoaderCircle className="spin" size={12} /> Loading saved history…
           </div>
         )}
-        {browser && props.page && (props.loading || !props.connected) && (
+        {props.page && (props.loading || !props.connected) && (
           <div className="conversation-updating" role="status">
             <LoaderCircle className="spin" size={12} />
             {props.connected
@@ -1073,7 +1052,7 @@ export function Chat(props: Props) {
         )}
         <div className="composer">
           <div
-            className={`composer-draft${browser && active && !queueMode ? " composer-steering" : ""}`}
+            className={`composer-draft${active && !queueMode ? " composer-steering" : ""}`}
           >
             {props.expanded && (
               <>
@@ -1097,10 +1076,7 @@ export function Chat(props: Props) {
                             (item) => item.id !== a.id,
                           );
                           setAttachments(next);
-                          browserAttachments.set(
-                            props.thread?.id || "new",
-                            next,
-                          );
+                          attachmentsState.set(props.thread?.id || "new", next);
                           persist();
                         }}
                       >
@@ -1132,7 +1108,7 @@ export function Chat(props: Props) {
               }
               value={text}
               disabled={props.thread?.archived}
-              readOnly={browser && sending}
+              readOnly={sending}
               onChange={(e) => {
                 setText(e.target.value);
                 drafts.current.set(props.thread?.id || "new", e.target.value);
@@ -1149,7 +1125,7 @@ export function Chat(props: Props) {
                   void send();
                 }
               }}
-              rows={browser ? 1 : 3}
+              rows={1}
             />
           </div>
           <div className="composer-bottom">
@@ -1164,65 +1140,30 @@ export function Chat(props: Props) {
               </button>
             )}
             <div className="model-controls">
-              {browser ? (
-                <>
-                  <ChoicePicker
-                    label="Model"
-                    value={model}
-                    disabled={active || sending}
-                    options={props.models.map((m) => ({
-                      value: m.id,
-                      label: m.displayName,
-                    }))}
-                    onChange={chooseModel}
-                  />
-                  <ChoicePicker
-                    label="Reasoning effort"
-                    value={effort}
-                    disabled={active || sending}
-                    options={(
-                      currentModel?.supportedReasoningEfforts || [
-                        { reasoningEffort: "high" },
-                      ]
-                    ).map((e) => ({
-                      value: e.reasoningEffort,
-                      label: e.reasoningEffort,
-                    }))}
-                    onChange={chooseEffort}
-                  />
-                </>
-              ) : (
-                <>
-                  <select
-                    aria-label="Model"
-                    disabled={active || sending}
-                    value={model}
-                    onChange={(e) => chooseModel(e.target.value)}
-                  >
-                    {props.models.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.displayName}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    aria-label="Reasoning effort"
-                    disabled={active || sending}
-                    value={effort}
-                    onChange={(e) => chooseEffort(e.target.value)}
-                  >
-                    {(
-                      currentModel?.supportedReasoningEfforts || [
-                        { reasoningEffort: "high" },
-                      ]
-                    ).map((e) => (
-                      <option key={e.reasoningEffort} value={e.reasoningEffort}>
-                        {e.reasoningEffort}
-                      </option>
-                    ))}
-                  </select>
-                </>
-              )}
+              <ChoicePicker
+                label="Model"
+                value={model}
+                disabled={active || sending}
+                options={props.models.map((m) => ({
+                  value: m.id,
+                  label: m.displayName,
+                }))}
+                onChange={chooseModel}
+              />
+              <ChoicePicker
+                label="Reasoning effort"
+                value={effort}
+                disabled={active || sending}
+                options={(
+                  currentModel?.supportedReasoningEfforts || [
+                    { reasoningEffort: "high" },
+                  ]
+                ).map((e) => ({
+                  value: e.reasoningEffort,
+                  label: e.reasoningEffort,
+                }))}
+                onChange={chooseEffort}
+              />
             </div>
             {active && (
               <button
@@ -1237,27 +1178,25 @@ export function Chat(props: Props) {
                 <Square size={14} fill="currentColor" />
               </button>
             )}
-            {
-              <button
-                className="send-button"
-                title={active ? "Steer agent" : "Send message"}
-                disabled={
-                  (!text.trim() && !attachments.length) ||
-                  uploading ||
-                  sending ||
-                  !props.connected ||
-                  !props.ready ||
-                  props.thread?.archived
-                }
-                onClick={() => void send()}
-              >
-                {sending ? (
-                  <LoaderCircle className="spin" size={17} />
-                ) : (
-                  <ArrowUp size={18} />
-                )}
-              </button>
-            }
+            <button
+              className="send-button"
+              title={active ? "Steer agent" : "Send message"}
+              disabled={
+                (!text.trim() && !attachments.length) ||
+                uploading ||
+                sending ||
+                !props.connected ||
+                !props.ready ||
+                props.thread?.archived
+              }
+              onClick={() => void send()}
+            >
+              {sending ? (
+                <LoaderCircle className="spin" size={17} />
+              ) : (
+                <ArrowUp size={18} />
+              )}
+            </button>
           </div>
         </div>
         {props.expanded && active && (

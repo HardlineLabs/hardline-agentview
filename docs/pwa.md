@@ -158,8 +158,8 @@ including when most of the work happened in one turn. Scroll upward and use
 **Earlier messages** to read older history. Tool output enters the page when its
 details are expanded; expansion is remembered while the chat remains open.
 Typing does not rerender unchanged messages, and streamed updates are grouped by
-animation frame. These browser optimizations do not change Host history or the
-Windows client. Browser Find and text selection only cover currently mounted
+animation frame. Windows 0.4.3 shares these rendering improvements; Host history
+is unchanged. Browser Find and text selection only cover currently mounted
 messages in a long chat; use Copy on a visible message to copy its full text.
 Loading the oldest page removes the history control in the same layout update as
 the new rows, preserving the reading position through delayed height measurements.

@@ -1,8 +1,12 @@
 import type { AppEvent } from "../shared/types";
 import { browserBridge } from "../browser/bridge";
+import { desktopBridge } from "./desktop-bridge";
 export const browser = import.meta.env.MODE === "pwa";
-export const bridge =
-  window.agentview || (browser ? browserBridge() : undefined);
+export const bridge = window.agentview
+  ? desktopBridge(window.agentview)
+  : browser
+    ? browserBridge()
+    : undefined;
 if (bridge && !window.agentview) window.agentview = bridge;
 export const invoke = (method: string, params?: any): Promise<any> =>
   bridge

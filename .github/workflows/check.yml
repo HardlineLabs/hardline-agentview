@@ -28,13 +28,16 @@ jobs:
       - run: npm run pwa:build
       - run: npx playwright install chromium webkit
       - run: npm run pwa:smoke
-      - run: npm run package:host
+      - run: npm run package
+      - run: npm run desktop:smoke
+        env:
+          AGENTVIEW_PACKAGED_CLIENT: out/client/win-unpacked/AgentView.exe
       - run: node scripts/package-smoke.mjs
       - run: node scripts/window-smoke.mjs
         env:
           AGENTVIEW_PACKAGED_HOST: out/host/win-unpacked
       - uses: actions/upload-artifact@v4
         with:
-          name: windows-host
-          path: out/host/
+          name: windows-desktop
+          path: out/
           retention-days: 7
