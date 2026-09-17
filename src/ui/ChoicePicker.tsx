@@ -110,7 +110,7 @@ export function ChoicePicker({
               </div>
             </div>
           </div>,
-          document.querySelector(".browser-app")!,
+          trigger.current?.closest(".workspace-client") ?? document.body,
         )}
     </>
   );

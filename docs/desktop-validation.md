@@ -6,7 +6,8 @@ station dragging, composer behavior, attachments, queue and recovery in Chromium
 and WebKit. No signed-in agent account or personal vault is used.
 
 `npm run desktop:smoke` launches the real Electron client against an isolated TLS
-Host with a deterministic runtime. It checks pairing, native window controls,
+Host with a deterministic runtime. It checks pairing, model/effort dialog selection
+and keyboard dismissal with focus restoration, native window controls,
 encrypted drafts and attachment restoration after process restart, image sending,
 auto-approval and renderer reload, workspace tools, notification preferences and
 host-switch isolation. Temporary Host and client data are removed on exit.
