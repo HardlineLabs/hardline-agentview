@@ -1,4 +1,5 @@
 import { PwaControls } from "../browser/PwaControls";
+import { DesktopUpdates } from "./DesktopUpdates";
 import { Scanner } from "../browser/Scanner";
 import { WorkspaceTools, BulkChats } from "./WorkspaceTools";
 import { saveDrafts } from "./client-state";
@@ -98,6 +99,7 @@ function WindowBar() {
         <span>Hardline {role === "host" ? "AgentView Host" : "AgentView"}</span>
       </div>
       <div className="window-controls">
+        {role === "client" && <DesktopUpdates />}
         <button
           aria-label="Minimize"
           onClick={() => bridge?.window("minimize")}

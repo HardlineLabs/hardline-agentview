@@ -6,7 +6,9 @@ import { buildHostLauncher } from "./build-launcher.mjs";
 process.env.ELECTRON_BUILDER_COMPRESSION_LEVEL ||= "3";
 for (const role of process.argv.includes("--host-only")
   ? ["host"]
-  : ["host", "client"]) {
+  : process.argv.includes("--client-only")
+    ? ["client"]
+    : ["host", "client"]) {
   const productName = role === "host" ? "AgentView Host" : "AgentView";
   const launcher = role === "host" ? await buildHostLauncher() : undefined;
   await build({

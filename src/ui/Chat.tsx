@@ -33,6 +33,7 @@ import remarkGfm from "remark-gfm";
 import { invoke } from "./api";
 import {
   drafts as clientDrafts,
+  beginAttachmentPreparation,
   attachments as attachmentsState,
   saveDrafts,
   type Attachment,
@@ -582,6 +583,7 @@ export function Chat(props: Props) {
   };
   const upload = async (files: FileList | null) => {
     if (!files) return;
+    const finishPreparation = beginAttachmentPreparation();
     setUploading(true);
     const key = props.thread?.id || "new";
     try {
@@ -648,6 +650,7 @@ export function Chat(props: Props) {
     } catch (e: any) {
       props.onError(e.message);
     } finally {
+      finishPreparation();
       setUploading(false);
       if (fileInput.current) fileInput.current.value = "";
     }

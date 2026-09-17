@@ -30,6 +30,19 @@ let persist: (state: ClientState) => Promise<void> = async () => {};
 let saving = Promise.resolve();
 let generation = 0;
 const activeRequests = new Set<string>();
+let preparingAttachments = 0;
+export function beginAttachmentPreparation() {
+  preparingAttachments++;
+  return () => {
+    preparingAttachments--;
+  };
+}
+export function assertClientReadyForUpdate() {
+  if (preparingAttachments || activeRequests.size)
+    throw new Error(
+      "An attachment or action is still being prepared. Wait for it to finish, then try Update UI again.",
+    );
+}
 
 export function restoreClientState(id: string, state?: ClientState) {
   generation++;

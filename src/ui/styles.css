@@ -235,7 +235,7 @@ kbd {
 .window-controls button:hover {
   background: #ffffff0a;
 }
-.window-controls button:last-child:hover {
+.window-controls > button:last-child:hover {
   background: #b54c4c;
   color: white;
 }
@@ -2395,4 +2395,50 @@ meter::-webkit-meter-optimum-value {
 }
 .legacy-pairing textarea {
   margin: 10px 0;
+}
+.desktop-updates {
+  position: relative;
+  -webkit-app-region: no-drag;
+}
+.window-controls .desktop-update-button {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  width: auto;
+  padding: 0 12px;
+  gap: 6px;
+  font-size: 11px;
+}
+.desktop-update-message {
+  position: fixed;
+  top: 42px;
+  right: 16px;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 420px;
+  padding: 12px 16px;
+  border: 1px solid #344854;
+  border-radius: 10px;
+  background: #142029;
+  color: #e4edf1;
+  font-size: 13px;
+  box-shadow: 0 8px 30px #0006;
+}
+.desktop-update-dialog {
+  margin: auto;
+  max-width: 380px;
+  padding: 28px;
+  border: 1px solid #344854;
+  border-radius: 14px;
+  background: #142029;
+  color: #e4edf1;
+  text-align: center;
+}
+.desktop-update-dialog::backdrop {
+  background: #0009;
+}
+.desktop-update-dialog small {
+  color: #acbdc8;
 }

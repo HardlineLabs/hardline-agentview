@@ -25,6 +25,8 @@ import { enableNetworkAccess, networkAccessEnabled } from "./firewall";
 import type { HostSettings, AppEvent, HostStatus } from "../shared/types";
 import { saveState } from "../host/state";
 import { loadHostSettings, recoverHostTunnel } from "../host/settings";
+import { UiUpdates } from "./ui-updates";
+import { pathToFileURL } from "node:url";
 
 const role =
   process.argv.includes("--role=host") ||
@@ -53,6 +55,53 @@ if (!app.requestSingleInstanceLock()) {
   let cleaningUp = false;
   let changing = false;
   let windowNeedsRecovery = false;
+  const uiUpdates = new UiUpdates(
+    path.join(dataDir, "ui-updates"),
+    path.join(__dirname, "../ui/index.html"),
+  );
+  let uiStartupTimer: ReturnType<typeof setTimeout> | undefined;
+  let uiReloading = false;
+  function trustedFrame(
+    event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent,
+  ) {
+    const expected =
+      process.env.AGENTVIEW_DEV_URL ||
+      pathToFileURL(
+        role === "client"
+          ? uiUpdates.entry
+          : path.join(__dirname, "../ui/index.html"),
+      ).href;
+    const frameUrl = new URL(event.senderFrame?.url || "about:blank");
+    frameUrl.hash = "";
+    return (
+      event.sender === window?.webContents &&
+      event.senderFrame === window?.webContents.mainFrame &&
+      frameUrl.href === new URL(expected).href
+    );
+  }
+  async function rollbackUi() {
+    if (!uiUpdates.pending) return;
+    clearTimeout(uiStartupTimer);
+    await uiUpdates.rollback(
+      "The update could not start. Restored the working UI.",
+    );
+    if (window && !window.isDestroyed()) await window.loadFile(uiUpdates.entry);
+  }
+  async function loadClientUi(target: BrowserWindow) {
+    if (uiUpdates.pending) {
+      clearTimeout(uiStartupTimer);
+      uiStartupTimer = setTimeout(
+        () => void rollbackUi().catch(() => {}),
+        20000,
+      );
+    }
+    try {
+      await target.loadFile(uiUpdates.entry);
+    } catch (error) {
+      if (uiUpdates.pending) await rollbackUi();
+      else throw error;
+    }
+  }
   const privateState = new PrivateState(dataDir);
   let clientHostId = "";
   let notificationsEnabled = false;
@@ -191,6 +240,7 @@ if (!app.requestSingleInstanceLock()) {
     });
     created.webContents.on("render-process-gone", () => {
       if (window === created) windowNeedsRecovery = true;
+      if (role === "client") void rollbackUi().catch(() => {});
     });
     created.on("close", (e) => {
       if (role === "host" && !quitting) {
@@ -204,7 +254,9 @@ if (!app.requestSingleInstanceLock()) {
     const dev = process.env.AGENTVIEW_DEV_URL;
     const loading = dev
       ? created.loadURL(dev)
-      : created.loadFile(path.join(__dirname, "../ui/index.html"));
+      : role === "client"
+        ? loadClientUi(created)
+        : created.loadFile(path.join(__dirname, "../ui/index.html"));
     void loading.catch((error: Error) => {
       if (created.isDestroyed()) return;
       windowNeedsRecovery = true;
@@ -243,7 +295,8 @@ if (!app.requestSingleInstanceLock()) {
   app.on("second-instance", (_event, args) => {
     if (!args.includes("--hidden")) showWindow();
   });
-  ipcMain.on("agentview:window", (_event, action) => {
+  ipcMain.on("agentview:window", (event, action) => {
+    if (!trustedFrame(event)) return;
     if (action === "minimize") window?.minimize();
     if (action === "maximize") {
       if (window?.isMaximized()) window.unmaximize();
@@ -253,7 +306,38 @@ if (!app.requestSingleInstanceLock()) {
   });
   ipcMain.handle(
     "agentview:invoke",
-    async (_event, method: string, params: any = {}) => {
+    async (event, method: string, params: any = {}) => {
+      if (!trustedFrame(event)) throw new Error("Untrusted application frame.");
+      if (role === "client" && method.startsWith("ui.")) {
+        if (method === "ui.status") return uiUpdates.status(app.getVersion());
+        if (method === "ui.stage") return uiUpdates.stage();
+        if (method === "ui.ready") {
+          clearTimeout(uiStartupTimer);
+          await uiUpdates.ready();
+          return {};
+        }
+        if (method === "ui.apply") {
+          if (uiReloading) throw new Error("The UI is already reloading.");
+          uiReloading = true;
+          try {
+            await uiUpdates.activate();
+          } catch (error) {
+            uiReloading = false;
+            throw error;
+          }
+          // Return the IPC reply before unloading the requesting renderer.
+          setTimeout(() => {
+            if (window && !window.isDestroyed())
+              void loadClientUi(window)
+                .finally(() => {
+                  uiReloading = false;
+                })
+                .catch(() => {});
+          }, 50);
+          return {};
+        }
+        throw new Error("Unknown UI update action.");
+      }
       if (method === "app.info") return { role, version: app.getVersion() };
       if (method === "clipboard.write") {
         clipboard.writeText(String(params.text || ""));
@@ -444,6 +528,7 @@ if (!app.requestSingleInstanceLock()) {
   );
   app.whenReady().then(async () => {
     await fs.mkdir(dataDir, { recursive: true });
+    if (role === "client") await uiUpdates.initialize();
     if (role === "host") {
       try {
         settings = await loadHostSettings(
