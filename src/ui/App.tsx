@@ -4,7 +4,7 @@ import { Scanner } from "../browser/Scanner";
 import { WorkspaceTools, BulkChats } from "./WorkspaceTools";
 import { saveDrafts } from "./client-state";
 import { RecentConversations } from "./conversations";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   Activity as ActivityIcon,
   ArrowRight,
@@ -770,6 +770,9 @@ function ClientApp() {
   );
   const [labels, setLabels] = useState(true);
   const [chatOpen, setChatOpen] = useState(true);
+  const [chatWidth, setChatWidth] = useState(385);
+  const maxChatWidth = () =>
+    Math.max(300, Math.min(720, window.innerWidth - 580));
   const [activityOpen, setActivityOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [palette, setPalette] = useState(false);
@@ -1198,7 +1201,10 @@ function ClientApp() {
               onClick={() => setDrawer(false)}
             />
           )}
-          <div className={`workspace ${chatOpen ? "" : "chat-collapsed"}`}>
+          <div
+            className={`workspace ${chatOpen ? "" : "chat-collapsed"}`}
+            style={{ "--chat-width": `${chatWidth}px` } as CSSProperties}
+          >
             <aside className="sidebar">
               <div className="drawer-title">
                 <div>
@@ -1456,6 +1462,8 @@ function ClientApp() {
                 ref={graph}
                 graph={g}
                 agents={snapshot.agents}
+                activity={snapshot.activity}
+                desktop={!browser}
                 selected={selected?.id}
                 query={query}
                 domain={domain}
@@ -1626,7 +1634,61 @@ function ClientApp() {
               )}
             </main>
             {(chatOpen || browser) && (
-              <Chat
+              <>
+                {!browser && (
+                  <div
+                    className="chat-resizer"
+                    role="separator"
+                    aria-label="Resize conversation panel"
+                    aria-orientation="vertical"
+                    aria-valuemin={300}
+                    aria-valuemax={720}
+                    aria-valuenow={chatWidth}
+                    tabIndex={0}
+                    onKeyDown={(event) => {
+                      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight")
+                        return;
+                      event.preventDefault();
+                      setChatWidth((width) =>
+                        Math.max(
+                          300,
+                          Math.min(
+                            maxChatWidth(),
+                            width + (event.key === "ArrowLeft" ? 24 : -24),
+                          ),
+                        ),
+                      );
+                    }}
+                    onPointerDown={(event) => {
+                      event.currentTarget.setPointerCapture(event.pointerId);
+                      const startX = event.clientX;
+                      const startWidth = chatWidth;
+                      const handle = event.currentTarget;
+                      handle.classList.add("dragging");
+                      const move = (moveEvent: PointerEvent) => {
+                        setChatWidth(
+                          Math.max(
+                            300,
+                            Math.min(
+                              maxChatWidth(),
+                              startWidth + startX - moveEvent.clientX,
+                            ),
+                          ),
+                        );
+                      };
+                      const up = () => {
+                        handle.classList.remove("dragging");
+                        handle.removeEventListener("pointermove", move);
+                        handle.removeEventListener("pointerup", up);
+                        handle.removeEventListener("pointercancel", up);
+                      };
+                      handle.addEventListener("pointermove", move);
+                      handle.addEventListener("pointerup", up);
+                      handle.addEventListener("pointercancel", up);
+                    }}
+                  />
+                )}
+                <Chat
                 autoApproveSupported={Array.isArray(
                   snapshot.autoApproveThreads,
                 )}
@@ -1675,7 +1737,8 @@ function ClientApp() {
                 }
                 onError={notify}
                 onHide={() => setChatOpen(false)}
-              />
+                />
+              </>
             )}
           </div>
           <footer className="app-footer">

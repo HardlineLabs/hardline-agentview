@@ -562,6 +562,19 @@ kbd {
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' opacity='.13' filter='url(%23n)'/%3E%3C/svg%3E");
   z-index: -1;
 }
+.desktop-app .brain-panel {
+  background:
+    radial-gradient(ellipse at 48% 46%, #104656b8 0, #09151dcc 48%, transparent 72%),
+    radial-gradient(ellipse at 12% 90%, #162f72b5, transparent 56%),
+    radial-gradient(ellipse at 88% 8%, #4a197c80, transparent 50%),
+    #03070d;
+  box-shadow: inset 0 0 110px #15d5e526;
+}
+.desktop-app .graph-vignette {
+  box-shadow:
+    inset 0 0 110px 24px #01040bcc,
+    inset 0 0 45px #22d9ff12;
+}
 
 .conversation-filters {
   padding: 0 14px 8px;
@@ -959,13 +972,37 @@ meter::-webkit-meter-optimum-value {
   margin: 0 3px;
 }
 .chat-panel {
-  width: 385px;
+  width: var(--chat-width, 385px);
   flex-shrink: 0;
   background: linear-gradient(170deg, #11191f, #10171d);
   border-left: 1px solid var(--line);
   display: flex;
   flex-direction: column;
   min-height: 0;
+}
+.chat-resizer {
+  position: relative;
+  z-index: 8;
+  width: 9px;
+  margin: 0 -5px 0 -4px;
+  flex: 0 0 9px;
+  cursor: col-resize;
+  touch-action: none;
+  outline: none;
+}
+.chat-resizer:after {
+  content: "";
+  position: absolute;
+  inset: 0 3px;
+  background: linear-gradient(180deg, transparent 8%, #67e8f955 35%, #c084fc66 65%, transparent 92%);
+  opacity: 0;
+  transition: opacity 120ms ease, box-shadow 120ms ease;
+}
+.chat-resizer:hover:after,
+.chat-resizer:focus-visible:after,
+.chat-resizer.dragging:after {
+  opacity: 1;
+  box-shadow: 0 0 12px #67e8f988;
 }
 .chat-heading {
   height: 77px;
@@ -2250,7 +2287,7 @@ meter::-webkit-meter-optimum-value {
   .brand {
     width: 197px;
   }
-  .chat-panel {
+  .browser-app .chat-panel {
     width: 430px;
   }
   .chat-scroll {
@@ -2299,7 +2336,7 @@ meter::-webkit-meter-optimum-value {
   .header-workspace {
     display: none;
   }
-  .chat-panel {
+  .browser-app .chat-panel {
     width: 330px;
   }
   .thread > div > span {

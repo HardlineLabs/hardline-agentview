@@ -120,6 +120,25 @@ try {
     height: innerHeight,
   }));
   assert.ok(layout.bottom <= layout.height);
+  const resizer = page.getByRole("separator", {
+    name: "Resize conversation panel",
+  });
+  const chatBeforeResize = await page
+    .locator(".chat-panel")
+    .evaluate((element) => element.getBoundingClientRect().width);
+  const resizerBox = await resizer.boundingBox();
+  assert.ok(resizerBox);
+  await page.mouse.move(
+    resizerBox!.x + resizerBox!.width / 2,
+    resizerBox!.y + resizerBox!.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(resizerBox!.x - 96, resizerBox!.y + resizerBox!.height / 2);
+  await page.mouse.up();
+  const chatAfterResize = await page
+    .locator(".chat-panel")
+    .evaluate((element) => element.getBoundingClientRect().width);
+  assert.ok(chatAfterResize >= chatBeforeResize + 80);
   await longConversationSmoke(page, host);
   await page.getByRole("button", { name: "Workspace settings" }).click();
   await page.getByRole("button", { name: "Files", exact: true }).click();
@@ -152,7 +171,7 @@ try {
   await page.screenshot({ path: "artifacts/desktop-parity/client.png" });
   assert.deepEqual(errors, []);
   console.log(
-    "Desktop parity: native TLS pairing, encrypted draft/attachment restart, send, approvals, tools, notifications, host isolation and layout passed.",
+    "Desktop parity: native TLS pairing, encrypted draft/attachment restart, resizable chat, send, approvals, tools, notifications, host isolation and layout passed.",
   );
 } catch (error) {
   console.error("Renderer errors:", errors);
