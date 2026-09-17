@@ -65,6 +65,11 @@ download response into the test process; production signature verification is
 still exercised, without adding a configurable trust bypass to the shipped app.
 They verify that the native process stays alive, pairing and drafts/attachments
 survive, the UI can restart offline, and network failure remains recoverable.
+They also suppress startup acknowledgement to exercise the native rollback timer
+and verify that a synthetic active turn completes after updating.
+After publication, `npm run ui:portable-smoke` launches the actual
+`out/client/AgentView.exe` with isolated settings and pulls the real HTTPS feed.
+It checks activation and the current-version response, then closes its own client.
 
 Bundles contain only renderer HTML, JavaScript, CSS, fonts and images. The shell
 checks the pinned Ed25519 signature, SHA-256, byte limits and exact bridge version

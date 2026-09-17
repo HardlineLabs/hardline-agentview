@@ -19,6 +19,7 @@
     "package:client": "npm run build && node scripts/package.mjs --client-only",
     "ui:bundle": "npm run build && tsx scripts/build-ui-update.ts",
     "ui:smoke": "tsx scripts/ui-update-smoke.ts",
+    "ui:portable-smoke": "node scripts/portable-ui-smoke.mjs",
     "smoke": "node scripts/smoke.mjs",
     "pwa:dev": "vite --mode pwa --host 127.0.0.1",
     "pwa:build": "tsc --noEmit && node scripts/build-pwa.mjs",
