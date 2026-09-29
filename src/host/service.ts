@@ -46,6 +46,11 @@ import { automaticApproval, threadPolicy, turnPolicy } from "./permissions";
 import { loadState, saveState } from "./state";
 import { version } from "../../package.json";
 import { elicitationContent } from "../shared/elicitation";
+import {
+  computerUseApp,
+  hasSavedComputerUseApproval,
+  savedComputerUseResponse,
+} from "./computer-use-approvals";
 
 export function visibleItems(items: ChatItem[]) {
   return items.filter((i) => !["reasoning", "hookPrompt"].includes(i.type));
@@ -163,19 +168,11 @@ export class HostService extends EventEmitter {
     this.codex.on("request", (request) => {
       this.approvals.set(request.id, request);
       if (this.autoApprove(request)) return;
-      if (request.params?.threadId)
-        this.setAgent(request.params.threadId, {
-          action: "waiting",
-          active: true,
-          detail: "Waiting for your response",
+      if (computerUseApp(request)) {
+        void this.approveSavedComputerUse(request).then((accepted) => {
+          if (!accepted) this.presentApproval(request);
         });
-      void this.features
-        .notice("Agent needs your input", request.params?.threadId)
-        .catch(() => {});
-      this.broadcast({
-        type: "approvals",
-        approvals: [...this.approvals.values()],
-      });
+      } else this.presentApproval(request);
     });
     this.codex.on("status", () => {
       this.emit("status");
@@ -408,8 +405,10 @@ export class HostService extends EventEmitter {
         this.approvals = new Map(
           state.approvals.map((a: Approval) => [a.id, a]),
         );
-        for (const request of this.approvals.values())
-          this.autoApprove(request);
+        for (const request of this.approvals.values()) {
+          if (!this.autoApprove(request) && computerUseApp(request))
+            await this.approveSavedComputerUse(request);
+        }
       }
       if (this.codex.codexHome) {
         this.observer = new SessionObserver(this.codex.codexHome);
@@ -1243,6 +1242,55 @@ export class HostService extends EventEmitter {
   }
   private async saveOwned() {
     await saveState(path.join(this.dataDir, "threads.json"), [...this.owned]);
+  }
+  private presentApproval(request: Approval) {
+    if (this.approvals.get(request.id) !== request) return;
+    if (request.params?.threadId)
+      this.setAgent(request.params.threadId, {
+        action: "waiting",
+        active: true,
+        detail: "Waiting for your response",
+      });
+    void this.features
+      .notice("Agent needs your input", request.params?.threadId)
+      .catch(() => {});
+    this.broadcast({
+      type: "approvals",
+      approvals: [...this.approvals.values()],
+    });
+  }
+  private async approveSavedComputerUse(request: Approval): Promise<boolean> {
+    const app = computerUseApp(request);
+    const { threadId, turnId } = request.params;
+    const current = () =>
+      this.codex.ready &&
+      this.owned.has(threadId) &&
+      this.approvals.get(request.id) === request &&
+      (!turnId ||
+        (!this.completedTurns.has(turnId) &&
+          (!this.activeTurns.has(threadId) ||
+            this.activeTurns.get(threadId) === turnId)));
+    if (!app || !current()) return false;
+    try {
+      // Re-read for each request so removing saved consent takes effect immediately.
+      const config = await this.codex.rpc("config/read", {
+        includeLayers: true,
+      });
+      if (!hasSavedComputerUseApproval(config, app) || !current()) return false;
+      this.codex.respond(request.id, savedComputerUseResponse());
+    } catch {
+      // Missing/unsupported configuration or a disconnected runtime stays manual.
+      return false;
+    }
+    this.approvals.delete(request.id);
+    const detail = `Computer Use allowed by saved app approval: ${app}`;
+    this.record({ threadId, action: "auto-approved", detail });
+    this.setAgent(threadId, { action: "working", active: true, detail });
+    this.broadcast({
+      type: "approvals",
+      approvals: [...this.approvals.values()],
+    });
+    return true;
   }
   private autoApprove(request: Approval): boolean {
     const threadId = request.params?.threadId;

@@ -71,6 +71,20 @@ turn's sandbox or grants permanent command rules.
 
 Questions, MCP forms and sign-in flows still require user input. Unknown requests
 and requests whose available decisions exclude acceptance also stay manual.
+Host 0.4.4-dev.3 honors explicitly saved Windows Computer Use app access from the
+user's Codex configuration. This is separate from per-chat Auto-approve. It applies
+only to an app-access prompt from the Computer Use runtime that permits persistent
+approval and whose exact app ID has a `true` entry in
+`[computer_use.windows.always_allowed_app_ids]`. Use the exact runtime app ID;
+process-backed apps can use `process:C:\path\app.exe`. The setting is a TOML table
+of quoted IDs and booleans, not an array. Manage saved access through the ChatGPT
+desktop app's Computer Use settings. Host reads the raw user config layer for each
+request, so removing consent applies to the next request without restarting.
+Project settings cannot grant consent. Unknown formats, app IDs, questions, audio
+capture, action confirmations and requests that disallow persistence stay manual.
+The regular **Allow** button remains a one-time answer. This Host-only change
+works with existing clients and preserves the running execution worker.
+
 **Recent auto-approvals** shows up to ten decisions for the chat from the Host's
 bounded in-memory activity history; it is not a permanent audit log. Install the
 Host update and reload the PWA to get the control. The execution worker does not
