@@ -60,7 +60,9 @@ export async function longConversationSmoke(page: Page, host: HostService) {
               command: `echo long-tool-${index}`,
               aggregatedOutput:
                 `Tool output ${index}\n` +
-                "Synthetic output stays offscreen until expanded.\n".repeat(80),
+                "Synthetic output stays offscreen until expanded.\n".repeat(
+                  2200,
+                ),
             }
           : {
               id: `long-${index}`,
@@ -304,7 +306,7 @@ export async function longConversationSmoke(page: Page, host: HostService) {
       "A responsive draft in a long conversation",
     );
     console.log(
-      `Long conversation: 1,200 items, ${openingMs} ms open, ${Math.round(typingP95)} ms input-to-frame p95 (empty chat ${Math.round(baselineP95)} ms); bounded rendering, tool details, pagination and live scroll passed`,
+      `Long conversation: 1,200 items / 40+ MB original tools, ${openingMs} ms open, ${Math.round(typingP95)} ms input-to-frame p95 (empty chat ${Math.round(baselineP95)} ms); bounded rendering, tool details, pagination and live scroll passed`,
     );
     await page.getByLabel("Message your agent").fill("");
   } finally {

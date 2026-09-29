@@ -123,6 +123,9 @@ export async function requestWithReceipt(
       "thread.steer",
       "thread.rename",
       "thread.bulk",
+      "thread.archive",
+      "thread.unarchive",
+      "thread.delete",
       "queue.add",
     ].includes(method)
   )

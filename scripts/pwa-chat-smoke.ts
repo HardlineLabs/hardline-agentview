@@ -195,6 +195,7 @@ export async function chatRecoverySmoke(
   };
   try {
     await page.getByTitle("New conversation", { exact: true }).click();
+    await page.getByLabel("New chat name", { exact: true }).fill(name);
     await page
       .getByRole("button", { name: "Reasoning effort", exact: true })
       .click();

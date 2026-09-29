@@ -1,4 +1,6 @@
 import { PwaControls } from "../browser/PwaControls";
+import { threadLabel } from "../shared/thread-label";
+import { prependHistory } from "../shared/history-pages";
 import { DesktopUpdates } from "./DesktopUpdates";
 import { Scanner } from "../browser/Scanner";
 import { WorkspaceTools, BulkChats } from "./WorkspaceTools";
@@ -793,9 +795,11 @@ function ClientApp() {
     recentPages.current.set(page.thread.id, page);
   }, [page]);
   const readGeneration = useRef(0);
+  const failedHistory = useRef(new Set<string>());
   const noteGeneration = useRef(0);
   const notify = (message: string) => setToast(message);
   const readThread = async (id: string, more = false, refresh = false) => {
+    if (!refresh) failedHistory.current.delete(id);
     const generation = ++readGeneration.current;
     if (!more) {
       threadRef.current = id;
@@ -820,16 +824,12 @@ function ClientApp() {
         more && old
           ? {
               ...result,
-              turns: [
-                ...result.turns.filter(
-                  (t) => !old.turns.some((o) => o.id === t.id),
-                ),
-                ...old.turns,
-              ],
+              turns: prependHistory(result.turns, old.turns),
             }
           : result,
       );
     } catch (e: any) {
+      failedHistory.current.add(id);
       if (
         generation === readGeneration.current &&
         e.message !== "Disconnected."
@@ -885,7 +885,10 @@ function ClientApp() {
         if (linkedThread) {
           history.replaceState(null, "", location.pathname);
           void readThread(linkedThread);
-        } else if (threadRef.current)
+        } else if (
+          threadRef.current &&
+          !failedHistory.current.has(threadRef.current)
+        )
           void readThread(threadRef.current, false, true);
       }
       if (event.type === "preferences")
@@ -903,7 +906,18 @@ function ClientApp() {
         setSnapshot((s) =>
           s ? { ...s, graph: event.graph, projects: event.projects } : s,
         );
-      if (event.type === "threads")
+      if (event.type === "threads") {
+        if (
+          threadRef.current &&
+          !event.threads.some((t: { id: string }) => t.id === threadRef.current)
+        ) {
+          recentPages.current.delete(threadRef.current);
+          ++readGeneration.current;
+          threadRef.current = undefined;
+          setSelectedThread(undefined);
+          setPage(undefined);
+          setLoading(false);
+        }
         setSnapshot((s) =>
           s
             ? {
@@ -914,6 +928,7 @@ function ClientApp() {
               }
             : s,
         );
+      }
       if (event.type === "limits")
         setSnapshot((s) => (s ? { ...s, limits: event.limits } : s));
       if (event.type === "usage") {
@@ -969,6 +984,25 @@ function ClientApp() {
         );
       if (event.type === "agentEvent") {
         const { method, params: p } = event;
+        const status =
+          method === "thread/status/changed"
+            ? p.status
+            : method === "turn/started"
+              ? { type: "active" }
+              : method === "turn/completed"
+                ? { type: "idle" }
+                : undefined;
+        if (status)
+          setSnapshot((s) =>
+            s
+              ? {
+                  ...s,
+                  threads: s.threads.map((t) =>
+                    t.id === p.threadId ? { ...t, status } : t,
+                  ),
+                }
+              : s,
+          );
         if (p.threadId !== threadRef.current) return;
         if (method === "error") {
           notify(
@@ -1056,8 +1090,16 @@ function ClientApp() {
   };
   const connected = connection === "connected";
   const g = snapshot?.graph || emptyGraph;
-  const currentThread =
-    page?.thread || snapshot?.threads.find((t) => t.id === selectedThread);
+  const listedThread = snapshot?.threads.find((t) => t.id === selectedThread);
+  const currentThread = listedThread
+    ? {
+        ...page?.thread,
+        ...listedThread,
+        model: listedThread.model ?? page?.thread.model,
+        reasoningEffort:
+          listedThread.reasoningEffort ?? page?.thread.reasoningEffort,
+      }
+    : page?.thread;
   const domains = [...new Set(g.nodes.map((n) => n.domain))];
   const threads = (snapshot?.threads || []).filter(
     (t) =>
@@ -1348,11 +1390,7 @@ function ClientApp() {
                   >
                     <MessageSquare size={13} />
                     <div>
-                      <span>
-                        {t.name ||
-                          t.preview.slice(0, 48) ||
-                          "Untitled conversation"}
-                      </span>
+                      <span>{threadLabel(t)}</span>
                       <small>
                         {t.owned ? "AgentView" : "Desktop"} ·{" "}
                         {ago(t.updatedAt * 1000)}
@@ -1909,7 +1947,7 @@ function ClientApp() {
                     }}
                   >
                     <MessageSquare size={14} />
-                    <span>{t.name || t.preview.slice(0, 60)}</span>
+                    <span>{threadLabel(t)}</span>
                   </button>
                 ))}
             </div>

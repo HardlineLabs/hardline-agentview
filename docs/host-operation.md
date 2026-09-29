@@ -109,6 +109,30 @@ zero cannot provide that desktop. AgentView does not disable UAC, change securit
 software, configure automatic Windows sign-in, solve CAPTCHAs or suppress required
 third-party consent.
 
+## Chat history and lifecycle
+
+Host 0.4.4-dev.4 and its matching PWA keep original conversation data in Codex
+storage while sending byte-bounded history pages (about 1 MB maximum), ordinary
+messages and compact tool previews. Expand a tool or choose **Load full detail**
+to retrieve original output in 32,000-character chunks. Very large messages show
+an excerpt with the same detail control. Older history can split within a single
+turn. Images and structured tool results are retained in the original detail;
+they are not automatically downloaded when opening history.
+
+The PWA asks for a name before sending a new chat's first message or onboarding
+instruction. Names are stored in the shared runtime; existing unnamed chats use
+compact first-line labels. Bulk selection uses the same labels as chat navigation.
+
+Successful runtime catalogs replace stale cached chat entries and reconcile
+observed activity. Archive, restore and delete have durable receipts and verify
+current execution state before acting. A stale activity badge no longer blocks
+an idle chat. A genuine writer lock held by a separate Codex runtime can still
+reject lifecycle changes, even after that runtime's turn ends: unsubscribe alone
+does not release the lock. Perform the action from its owning session or close
+that session and retry. AgentView does not terminate another runtime or edit its
+database to bypass ownership. These changes preserve the existing execution
+worker during Host replacement.
+
 ## Managed installation and updates
 
 Build with `npm ci` and `npm run package`, then install the validated unpacked host:

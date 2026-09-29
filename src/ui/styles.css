@@ -2479,3 +2479,23 @@ meter::-webkit-meter-optimum-value {
 .desktop-update-dialog small {
   color: #acbdc8;
 }
+.new-chat-name {
+  display: grid;
+  gap: 8px;
+  padding: 12px 0;
+  color: #a4cfc3;
+}
+.new-chat-name input {
+  width: 100%;
+  min-width: 0;
+}
+.item-detail {
+  padding: 8px 0;
+  min-width: 0;
+}
+.item-detail pre {
+  max-height: 360px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

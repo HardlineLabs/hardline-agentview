@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { threadLabel } from "../shared/thread-label";
 import { browser, invoke, subscribe } from "./api";
 import type { Project, Thread } from "../shared/types";
 import { outbox } from "./client-state";
@@ -546,7 +547,7 @@ export function BulkChats({
                     )
                   }
                 />
-                <span>{t.name || t.preview || "Untitled conversation"}</span>
+                <span title={t.name || threadLabel(t)}>{threadLabel(t)}</span>
               </label>
             ))}
           </div>

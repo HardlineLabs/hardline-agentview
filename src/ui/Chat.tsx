@@ -30,7 +30,8 @@ import {
 } from "../shared/elicitation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { invoke } from "./api";
+import { invoke, browser } from "./api";
+import { threadLabel } from "../shared/thread-label";
 import {
   drafts as clientDrafts,
   beginAttachmentPreparation,
@@ -73,6 +74,49 @@ export function Markdown({ text }: { text: string }) {
     </ReactMarkdown>
   );
 }
+function ItemDetail({
+  item,
+  autoLoad = false,
+}: {
+  item: ChatItem;
+  autoLoad?: boolean;
+}) {
+  const [text, setText] = useState("");
+  const [offset, setOffset] = useState<number | null>(0);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const load = async () => {
+    if (busy || offset === null) return;
+    setBusy(true);
+    setError("");
+    try {
+      const page = await invoke("thread.item.read", {
+        ref: item.detail,
+        offset,
+      });
+      setText((old) => old + page.text);
+      setOffset(page.nextOffset);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  useEffect(() => {
+    if (autoLoad) void load();
+  }, []);
+  return (
+    <div className="item-detail">
+      {text && <pre>{text}</pre>}
+      {error && <p role="alert">{error}</p>}
+      {offset !== null && (
+        <button disabled={busy} onClick={() => void load()}>
+          {busy ? "Loading…" : text ? "Load more detail" : "Load full detail"}
+        </button>
+      )}
+    </div>
+  );
+}
 function Item({ item, lazy = false }: { item: ChatItem; lazy?: boolean }) {
   const expanded = useContext(ToolState);
   const [open, setOpen] = useState(() => Boolean(expanded?.has(item.id)));
@@ -88,6 +132,9 @@ function Item({ item, lazy = false }: { item: ChatItem; lazy?: boolean }) {
           <small>
             <FileText size={12} /> Vault note attached
           </small>
+        )}
+        {item.detail && (
+          <ItemDetail key={JSON.stringify(item.detail)} item={item} />
         )}
       </div>
     );
@@ -110,6 +157,9 @@ function Item({ item, lazy = false }: { item: ChatItem; lazy?: boolean }) {
         <div className="markdown">
           <Markdown text={item.text || ""} />
         </div>
+        {item.detail && (
+          <ItemDetail key={JSON.stringify(item.detail)} item={item} />
+        )}
       </div>
     );
   const text =
@@ -149,13 +199,16 @@ function Item({ item, lazy = false }: { item: ChatItem; lazy?: boolean }) {
           <Check size={12} />
         )}
       </summary>
-      {(!lazy || open) && (
-        <pre>
-          {item.command || text}
-          {item.aggregatedOutput ? "\n\n" + item.aggregatedOutput : ""}
-          {item.changes?.map((c) => "\n" + (c.diff || c.path)).join("")}
-        </pre>
-      )}
+      {(!lazy || open) &&
+        (item.detail ? (
+          <ItemDetail key={JSON.stringify(item.detail)} item={item} autoLoad />
+        ) : (
+          <pre>
+            {item.command || text}
+            {item.aggregatedOutput ? "\n\n" + item.aggregatedOutput : ""}
+            {item.changes?.map((c) => "\n" + (c.diff || c.path)).join("")}
+          </pre>
+        ))}
     </details>
   );
 }
@@ -349,12 +402,18 @@ type Props = {
   onCleared: () => void;
 };
 export function Chat(props: Props) {
+  const [newName, setNewName] = useState("");
+  const pendingCreated = useRef<Thread | undefined>(undefined);
+  useEffect(() => {
+    setNewName("");
+    pendingCreated.current = undefined;
+  }, [props.thread?.id]);
   const currentChat = useRef(props.thread?.id || "new");
   currentChat.current = props.thread?.id || "new";
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const [rename, setRename] = useState<string>();
-  const [renamed, setRenamed] = useState<string>();
+
   const [recovery, setRecovery] = useState<any>();
   const [queueMode, setQueueMode] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -392,8 +451,7 @@ export function Chat(props: Props) {
   const follow = useRef(true);
   const input = useRef<HTMLTextAreaElement>(null);
   const active = Boolean(
-    props.thread?.owned &&
-    props.page?.turns.some((t) => t.status === "inProgress"),
+    props.thread?.owned && props.thread?.status.type === "active",
   );
   const currentModel = props.models.find((m) => m.id === model);
   const received = useMemo(() => {
@@ -428,7 +486,6 @@ export function Chat(props: Props) {
     setText(drafts.current.get(props.thread?.id || "new") || "");
     setAttachments(attachmentsState.get(props.thread?.id || "new") || []);
     setRename(undefined);
-    setRenamed(undefined);
     setRecovery(undefined);
     setQueueMode(false);
     setConfirmClear(undefined);
@@ -472,6 +529,10 @@ export function Chat(props: Props) {
   const animateSend = useComposer(input, follow, true, text, props.thread?.id);
   const send = async (onboardingText?: string) => {
     const outgoingText = onboardingText ?? text;
+    if (browser && !props.thread && !newName.trim()) {
+      props.onError("Name your new chat before sending.");
+      return;
+    }
     if (
       (!outgoingText.trim() && !attachments.length) ||
       sending ||
@@ -503,7 +564,14 @@ export function Chat(props: Props) {
       let created: Thread | undefined;
       let id = props.thread?.id;
       if (!id) {
-        const thread = await invoke("thread.create", { projectId, model });
+        const thread =
+          pendingCreated.current ||
+          (await invoke("thread.create", {
+            projectId,
+            model,
+            ...(newName.trim() ? { name: newName.trim() } : {}),
+          }));
+        pendingCreated.current = thread;
         created = thread;
         id = thread.id;
       }
@@ -679,17 +747,17 @@ export function Chat(props: Props) {
         <div>
           <span className="eyebrow">Conversation</span>
           <h3>
-            {renamed ||
-              props.thread?.name ||
-              (props.thread
-                ? props.thread.preview.slice(0, 42)
-                : "A fresh perspective")}
+            {props.thread ? threadLabel(props.thread) : "A fresh perspective"}
           </h3>
         </div>
         <button
           className="icon-button"
           title="New conversation"
-          onClick={props.onNew}
+          onClick={() => {
+            setNewName("");
+            pendingCreated.current = undefined;
+            props.onNew();
+          }}
         >
           <Plus size={17} />
         </button>
@@ -798,11 +866,10 @@ export function Chat(props: Props) {
               onSubmit={async (e) => {
                 e.preventDefault();
                 try {
-                  const result = await invoke("thread.rename", {
+                  await invoke("thread.rename", {
                     id: props.thread!.id,
                     name: rename,
                   });
-                  setRenamed(result.name);
                   setRename(undefined);
                 } catch (e: any) {
                   props.onError(e.message);
@@ -919,6 +986,18 @@ export function Chat(props: Props) {
               Start a conversation. Your agent works on the host, while you
               watch ideas take shape.
             </p>
+            {browser && !props.thread && (
+              <label className="new-chat-name">
+                Name your new chat
+                <input
+                  aria-label="New chat name"
+                  maxLength={200}
+                  placeholder="What are we working on?"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                />
+              </label>
+            )}
             <label className="workspace-select">
               <span>Working in</span>
               <select
@@ -1031,7 +1110,11 @@ export function Chat(props: Props) {
             <button
               className="onboard-agent"
               disabled={
-                sending || !props.connected || !props.ready || uploading
+                sending ||
+                !props.connected ||
+                !props.ready ||
+                uploading ||
+                (browser && !props.thread && !newName.trim())
               }
               onClick={() => void send(props.onboarding)}
             >
@@ -1185,6 +1268,7 @@ export function Chat(props: Props) {
               className="send-button"
               title={active ? "Steer agent" : "Send message"}
               disabled={
+                (browser && !props.thread && !newName.trim()) ||
                 (!text.trim() && !attachments.length) ||
                 uploading ||
                 sending ||

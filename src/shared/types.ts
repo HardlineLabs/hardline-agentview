@@ -78,6 +78,12 @@ export type AccountLimits = {
   error?: string;
 };
 export type ChatItem = {
+  detail?: {
+    threadId: string;
+    turnId: string;
+    itemId: string;
+    cursor?: string | null;
+  };
   id: string;
   clientId?: string | null;
   type: string;

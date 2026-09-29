@@ -164,6 +164,15 @@ async function expandedWorkspace(page: Page, engine: string) {
     });
   await page.getByTitle("Close settings", { exact: true }).click();
   await page.getByTitle("New conversation", { exact: true }).click();
+  assert.equal(
+    await page
+      .getByRole("button", { name: "Send message", exact: true })
+      .isDisabled(),
+    true,
+  );
+  await page
+    .getByLabel("New chat name", { exact: true })
+    .fill(`${engine} named chat`);
   await page
     .getByRole("button", { name: "Onboard agent", exact: true })
     .click();
@@ -175,6 +184,12 @@ async function expandedWorkspace(page: Page, engine: string) {
       .getByRole("button", { name: "Onboard agent", exact: true })
       .count(),
     0,
+  );
+  assert.equal(
+    first
+      .snapshot()
+      .threads.some((thread) => thread.name === `${engine} named chat`),
+    true,
   );
   await page.getByRole("button", { name: "Rename", exact: true }).click();
   await page.getByLabel("Conversation name").fill(`${engine} renamed chat`);
