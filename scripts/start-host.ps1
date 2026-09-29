@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param([Parameter(Mandatory)][string]$InstallDirectory)
 $ErrorActionPreference = 'Stop'
+Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
 $installRoot = [IO.Path]::GetFullPath($InstallDirectory)
 $statePath = Join-Path $installRoot 'current.json'
 if (Test-Path -LiteralPath (Join-Path $installRoot 'updating.lock')) { exit 0 }

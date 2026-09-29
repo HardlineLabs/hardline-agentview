@@ -7,6 +7,9 @@ param(
     [switch]$Elevated
 )
 $ErrorActionPreference = 'Stop'
+# Agent-driven installs can inherit the execution worker's Node-only Electron mode.
+# The managed Host must start as an Electron application.
+Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
 $sourceRoot = (Resolve-Path -LiteralPath $PackageDirectory).Path
 $installRoot = [IO.Path]::GetFullPath($InstallDirectory).TrimEnd('\')
 $versionRoot = [IO.Path]::GetFullPath((Join-Path $installRoot "versions\$Version"))

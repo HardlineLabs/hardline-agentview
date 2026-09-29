@@ -163,6 +163,11 @@ installation root is retained for the first rollback. Do not delete older versio
 directories while their runtime still runs. Settings, device keys, attachments and
 Codex history live outside those version directories.
 
+Managed install/start scripts clear inherited `ELECTRON_RUN_AS_NODE` before
+launching the Host. An agent executing inside the independent worker can export
+that flag; passing it into the Host makes Electron run as Node and exit before
+starting the service or tunnel. It is retained only inside execution workers.
+
 `start-host.ps1` adopts an already running installed host and restarts unexpected
 exits with bounded backoff. An intentional tray Quit ends supervision. Updates
 coordinate with the scheduled task using `updating.lock`. The computer must stay
