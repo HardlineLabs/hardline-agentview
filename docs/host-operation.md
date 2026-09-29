@@ -75,9 +75,10 @@ Host 0.4.4-dev.3 honors explicitly saved Windows Computer Use app access from th
 user's Codex configuration. This is separate from per-chat Auto-approve. It applies
 only to an app-access prompt from the Computer Use runtime that permits persistent
 approval and whose exact app ID has a `true` entry in
-`[computer_use.windows.always_allowed_app_ids]`. Use the exact runtime app ID;
-process-backed apps can use `process:C:\path\app.exe`. The setting is a TOML table
-of quoted IDs and booleans, not an array. Manage saved access through the ChatGPT
+`[computer_use.windows.always_allowed_app_ids]`. Use the exact app ID in the
+approval request's `tool_params.app`, such as `"mspaint.exe" = true`; this can
+differ from the `process:` ID returned when listing windows. The setting is a
+TOML table of quoted IDs and booleans, not an array. Manage saved access through the ChatGPT
 desktop app's Computer Use settings. Host reads the raw user config layer for each
 request, so removing consent applies to the next request without restarting.
 Project settings cannot grant consent. Unknown formats, app IDs, questions, audio
