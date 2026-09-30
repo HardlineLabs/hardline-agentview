@@ -74,7 +74,12 @@ also folded into memory so early deltas remain visible before logs reach disk.
 
 The catalog exhausts active and archived `thread/list` cursors with every local
 source kind and provider included. `project/list` and `threadSection/list` supply
-projects and categories. During Desktop's project migration, a read-only adapter
+runtime projects and categories. When the selected vault has `workspace.json`, its
+`products` entries are the canonical onboarding workspaces: the manifest ID,
+checkout path and entry-note title remain stable even before Codex has seen that
+folder. Runtime project metadata is joined by normalized checkout path and used
+only at the runtime boundary. Runtime-only folders remain available after the
+manifest workspaces. During Desktop's project migration, a read-only adapter
 reads only legacy local assignments and their canonical ID mapping from
 `.codex-global-state.json`; runtime assignment takes precedence, then legacy
 assignment, then an exact working-folder match. That adapter is version-sensitive

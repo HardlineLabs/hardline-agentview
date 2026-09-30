@@ -15,6 +15,7 @@ import {
   threadSources,
   desktopAssignments,
   assignProjects,
+  mergeProjects,
 } from "./catalog";
 import type {
   Activity,
@@ -601,18 +602,7 @@ export class HostService extends EventEmitter {
     }
   }
   private allProjects(): Project[] {
-    return [
-      ...this.projects,
-      ...this.vault.projects.filter(
-        (p) =>
-          !this.projects.some(
-            (other) =>
-              other.path &&
-              path.resolve(other.path).toLowerCase() ===
-                path.resolve(p.path).toLowerCase(),
-          ),
-      ),
-    ];
+    return mergeProjects(this.vault.projects, this.projects);
   }
   async refreshLimits() {
     if (!this.codex.ready || this.readingLimits || this.stopping) return;
@@ -1030,14 +1020,14 @@ export class HostService extends EventEmitter {
       if (method === "thread.compact")
         return this.codex.rpc("thread/compact/start", { threadId: p.id });
       if (method === "thread.project") {
-        if (
-          p.projectId !== "" &&
-          !this.projects.some((project) => project.id === p.projectId)
-        )
+        const project = this.allProjects().find(
+          (project) => project.id === p.projectId,
+        );
+        if (p.projectId !== "" && !project?.runtimeId)
           throw new Error("Choose an existing runtime project.");
         return this.codex.rpc("thread/metadata/update", {
           threadId: p.id,
-          projectId: p.projectId,
+          projectId: project?.runtimeId || "",
         });
       }
       if (method === "thread.review") {
@@ -1258,7 +1248,7 @@ export class HostService extends EventEmitter {
         throw new Error("Choose a workspace with a local folder.");
       const { thread } = await this.codex.rpc("thread/start", {
         cwd: project.path,
-        ...(project.runtime ? { projectId: project.id } : {}),
+        ...(project.runtimeId ? { projectId: project.runtimeId } : {}),
         ...(p.model ? { model: p.model } : {}),
         ephemeral: false,
         ...threadPolicy(this.features.preferences.defaultPermissions),

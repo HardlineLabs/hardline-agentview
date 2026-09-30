@@ -112,6 +112,7 @@ export type Project = {
   name: string;
   path: string;
   runtime?: boolean;
+  runtimeId?: string;
 };
 export type Model = {
   id: string;

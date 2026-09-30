@@ -174,9 +174,19 @@ export class Vault extends EventEmitter {
           string,
           any,
         ][]) {
+          const onboarding = slash(String(product.onboarding || ""));
+          const entry = nodes.find(
+            (node) => node.id.toLowerCase() === onboarding.toLowerCase(),
+          );
           this.projects.push({
             id,
-            name: path.basename(product.onboarding || id, ".md"),
+            name:
+              entry?.title ||
+              id
+                .split(/[-_]+/)
+                .filter(Boolean)
+                .map((part) => part[0].toUpperCase() + part.slice(1))
+                .join(" "),
             path: path.resolve(this.root, product.path),
           });
         }

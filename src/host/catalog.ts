@@ -2,6 +2,36 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { Project, Thread } from "../shared/types";
 
+const normalizedPath = (value: string) => path.resolve(value).toLowerCase();
+
+export function mergeProjects(
+  manifestProjects: Project[],
+  runtimeProjects: Project[],
+): Project[] {
+  const matchedRuntimeIds = new Set<string>();
+  const canonical = manifestProjects.map((project) => {
+    const runtime = runtimeProjects.find(
+      (candidate) =>
+        candidate.path &&
+        project.path &&
+        normalizedPath(candidate.path) === normalizedPath(project.path),
+    );
+    if (!runtime) return project;
+    matchedRuntimeIds.add(runtime.id);
+    return { ...project, runtime: true, runtimeId: runtime.id };
+  });
+  return [
+    ...canonical,
+    ...runtimeProjects
+      .filter((project) => !matchedRuntimeIds.has(project.id))
+      .map((project) => ({
+        ...project,
+        runtime: true,
+        runtimeId: project.id,
+      })),
+  ];
+}
+
 export const threadSources = [
   "cli",
   "vscode",
@@ -68,15 +98,25 @@ export function assignProjects(
   projects: Project[],
   legacy: Record<string, string>,
 ) {
-  const normalized = (value: string) => path.resolve(value).toLowerCase();
-  return threads.map((thread) => ({
-    ...thread,
-    projectId:
-      thread.projectId ||
-      legacy[thread.id] ||
-      projects.find(
-        (project) =>
-          project.path && normalized(project.path) === normalized(thread.cwd),
-      )?.id,
-  }));
+  return threads.map((thread) => {
+    const assigned = thread.projectId || legacy[thread.id];
+    const canonical = assigned
+      ? projects.find(
+          (project) =>
+            project.runtimeId === assigned ||
+            (project.runtime && project.id === assigned),
+        )
+      : undefined;
+    return {
+      ...thread,
+      projectId:
+        canonical?.id ||
+        assigned ||
+        projects.find(
+          (project) =>
+            project.path &&
+            normalizedPath(project.path) === normalizedPath(thread.cwd),
+        )?.id,
+    };
+  });
 }
