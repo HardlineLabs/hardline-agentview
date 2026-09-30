@@ -1,3 +1,4 @@
+import { fixtureItemPage } from "./history-fixture";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { HostService } from "../src/host/service";
@@ -124,6 +125,15 @@ export async function makeClientHost(
       if (readDelay())
         await new Promise((resolve) => setTimeout(resolve, readDelay()));
       return { thread: fixtureThreads.get(params.threadId) };
+    }
+    if (method === "thread/items/list") {
+      const page = await host.codex.rpc("thread/turns/list", {
+        threadId: params.threadId,
+        itemsView: "notLoaded",
+        limit: 100,
+        cursor: null,
+      });
+      return fixtureItemPage([...page.data].reverse(), params);
     }
     if (method === "thread/turns/list" && fixtureTurns.has(params.threadId))
       return {

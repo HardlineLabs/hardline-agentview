@@ -111,13 +111,29 @@ third-party consent.
 
 ## Chat history and lifecycle
 
-Host 0.4.4-dev.4 and its matching PWA keep original conversation data in Codex
-storage while sending byte-bounded history pages (about 1 MB maximum), ordinary
-messages and compact tool previews. Expand a tool or choose **Load full detail**
-to retrieve original output in 32,000-character chunks. Very large messages show
-an excerpt with the same detail control. Older history can split within a single
-turn. Images and structured tool results are retained in the original detail;
-they are not automatically downloaded when opening history.
+Host 0.4.4-dev.6 builds history pages in the execution worker, before sending
+anything across the worker pipe or the client connection. Pages are capped at
+256 KiB of display data and can split inside a single hours-long turn. Opening
+loads the latest page; **Earlier messages** requests its predecessor using an
+opaque item cursor. The worker requests item-sized original data from the local
+app-server and turn metadata without contents; it never requests whole turns for
+history. Older runtimes without item pagination report an error instead of falling
+back to a full-history download.
+
+Original conversation data stays in Codex storage. Tool previews and excerpts are
+bounded; **Load full detail** retrieves the original in 32,000-character chunks,
+also sliced in the worker before crossing its pipe. Detail cursors stay anchored
+to the original item when newer messages arrive. Images and structured tool
+results remain in the original detail and are not automatically downloaded on
+opening. The existing PWA and Windows clients use this unchanged page contract.
+
+A retained older worker must migrate before these reads become available. During
+an update, the managed installer preserves active execution. Install the new Host,
+then use **Restart execution runtime** only when turns and approvals are idle;
+the worker atomically refuses shutdown while execution, approvals or accepted
+starts are in flight. Background migration must honor this guard and retain the
+old version directory until no process references it. No force-stopping active
+workers or editing Codex storage is needed.
 
 The PWA asks for a name before sending a new chat's first message or onboarding
 instruction. Names are stored in the shared runtime; existing unnamed chats use

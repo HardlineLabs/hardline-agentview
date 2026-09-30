@@ -1,3 +1,4 @@
+import { fixtureItemPage } from "./history-fixture";
 import assert from "node:assert/strict";
 import type { Page } from "playwright";
 import type { HostService } from "../src/host/service";
@@ -87,13 +88,22 @@ export async function longConversationSmoke(page: Page, host: HostService) {
     ],
   };
   host.codex.rpc = async (method, params) => {
+    if (method === "thread/items/list" && params.threadId === thread.id)
+      return fixtureItemPage([older, turn], params);
     if (method === "thread/turns/list" && params.threadId === thread.id)
       return {
-        data: params.cursor ? [older] : [turn],
-        nextCursor: params.cursor ? null : "earlier-performance",
+        data: [turn, older],
+        nextCursor: null,
       };
     return rpc(method, params);
   };
+  const firstPage = await host.handle("thread.read", { id: thread.id });
+  let firstIndex = Number(
+    firstPage.turns
+      .flatMap((t: Turn) => t.items)
+      .find((i: any) => i.type === "userMessage")!
+      .id.split("-")[1],
+  );
   const panel = page.locator(".chat-scroll");
   const toolLayout = () =>
     page.waitForFunction(() => {
@@ -126,7 +136,19 @@ export async function longConversationSmoke(page: Page, host: HostService) {
     await panel.evaluate((element) => {
       element.scrollTop = 0;
     });
-    await page.getByText("Long request 0", { exact: true }).waitFor();
+    // Native end anchoring first measures rows newly mounted at this boundary.
+    await page.waitForTimeout(200);
+    await panel.evaluate((element) => {
+      element.scrollTop = 1;
+    });
+    await page.waitForTimeout(50);
+    await panel.evaluate((element) => {
+      element.scrollTop = 0;
+    });
+    await page.waitForTimeout(200);
+    await page
+      .getByText(`Long request ${firstIndex}`, { exact: true })
+      .waitFor();
   };
   try {
     await page.getByTitle("New conversation", { exact: true }).click();
@@ -170,6 +192,84 @@ export async function longConversationSmoke(page: Page, host: HostService) {
     );
 
     await top();
+    // Loading older history must retain the reader's visible message and offset.
+    const before = await page
+      .getByText(`Long request ${firstIndex}`, { exact: true })
+      .boundingBox();
+    await panel.dispatchEvent("wheel", { deltaY: -100 });
+    await page.waitForFunction(
+      () => !document.querySelector<HTMLButtonElement>(".load-more")?.disabled,
+    );
+    await page
+      .waitForFunction(
+        ({ y, index }) => {
+          const anchor = document.querySelector(
+            `[data-message-key="long-turn/long-${index}"] .user-message > div`,
+          );
+          return (
+            anchor && Math.abs(anchor.getBoundingClientRect().top - y) < 10
+          );
+        },
+        { y: before!.y, index: firstIndex },
+      )
+      .catch(async (error) => {
+        console.error("History anchor", {
+          before,
+          actual: await page.evaluate((index) => {
+            const panel = document.querySelector(".chat-scroll")!;
+            const list = document.querySelector(".browser-transcript")!;
+            const row = document.querySelector(
+              `[data-message-key="long-turn/long-${index}"]`,
+            )!;
+            return {
+              scrollTop: panel.scrollTop,
+              panelTop: panel.getBoundingClientRect().top,
+              listTop: list.getBoundingClientRect().top,
+              rowTop: row.getBoundingClientRect().top,
+              textTop: row
+                .querySelector(".user-message > div")!
+                .getBoundingClientRect().top,
+            };
+          }, firstIndex),
+        });
+        throw error;
+      });
+    // Late ResizeObserver/iOS scroll compensation must preserve it too.
+    await page.waitForTimeout(500);
+    const after = await page
+      .getByText(`Long request ${firstIndex}`, { exact: true })
+      .boundingBox();
+    assert.ok(
+      before && after && Math.abs(before.y - after.y) < 10,
+      `Prepending history preserves the visible anchor (${before?.y} -> ${after?.y})`,
+    );
+    for (
+      let pages = 0;
+      await page.getByRole("button", { name: "Earlier messages" }).count();
+      pages++
+    ) {
+      assert.ok(pages < 20, "History pagination terminates");
+      await panel.evaluate((element) => {
+        element.scrollTop = 0;
+      });
+      await page
+        .getByRole("button", { name: "Earlier messages", exact: true })
+        .click();
+      await page.waitForFunction(
+        () =>
+          !document.querySelector<HTMLButtonElement>(".load-more")?.disabled,
+      );
+    }
+    firstIndex = 0;
+    await top();
+    await panel.evaluate((element) => {
+      element.scrollTop = 0;
+    });
+    await page
+      .getByText("Earlier performance history", { exact: true })
+      .waitFor();
+
+    await top();
     const firstTool = page.locator(
       '[data-message-key="long-turn/long-1"] .tool-item',
     );
@@ -190,59 +290,6 @@ export async function longConversationSmoke(page: Page, host: HostService) {
     await firstTool.locator("summary").click();
     await firstTool.locator("pre").waitFor({ state: "detached" });
     await toolLayout();
-
-    // Loading older history must retain the reader's visible message and offset.
-    const before = await page
-      .getByText("Long request 0", { exact: true })
-      .boundingBox();
-    await page.getByRole("button", { name: "Earlier messages" }).click();
-    await page
-      .getByRole("button", { name: "Earlier messages" })
-      .waitFor({ state: "detached" });
-    await page
-      .waitForFunction((y) => {
-        const anchor = document.querySelector(
-          '[data-message-key="long-turn/long-0"] .user-message > div',
-        );
-        return anchor && Math.abs(anchor.getBoundingClientRect().top - y) < 10;
-      }, before!.y)
-      .catch(async (error) => {
-        console.error("History anchor", {
-          before,
-          actual: await page.evaluate(() => {
-            const panel = document.querySelector(".chat-scroll")!;
-            const list = document.querySelector(".browser-transcript")!;
-            const row = document.querySelector(
-              '[data-message-key="long-turn/long-0"]',
-            )!;
-            return {
-              scrollTop: panel.scrollTop,
-              panelTop: panel.getBoundingClientRect().top,
-              listTop: list.getBoundingClientRect().top,
-              rowTop: row.getBoundingClientRect().top,
-              textTop: row
-                .querySelector(".user-message > div")!
-                .getBoundingClientRect().top,
-            };
-          }),
-        });
-        throw error;
-      });
-    // Late ResizeObserver/iOS scroll compensation must preserve it too.
-    await page.waitForTimeout(500);
-    const after = await page
-      .getByText("Long request 0", { exact: true })
-      .boundingBox();
-    assert.ok(
-      before && after && Math.abs(before.y - after.y) < 10,
-      `Prepending history preserves the visible anchor (${before?.y} -> ${after?.y})`,
-    );
-    await panel.evaluate((element) => {
-      element.scrollTop = 0;
-    });
-    await page
-      .getByText("Earlier performance history", { exact: true })
-      .waitFor();
 
     // Reading the middle while the tail streams must not pull the reader down.
     await panel.evaluate((element) => {

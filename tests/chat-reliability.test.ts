@@ -1,3 +1,4 @@
+import { fixtureItemPage } from "../scripts/history-fixture";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -230,12 +231,17 @@ test("Host pages tool detail on demand and retains its complete original content
     result: { text: "detail".repeat(20000) },
   };
   host.codex.rpc = async (method, params) =>
-    method === "thread/turns/list"
-      ? {
-          data: [{ id: "turn", status: "completed", items: [original] }],
-          nextCursor: null,
-        }
-      : rpc(method, params);
+    method === "thread/items/list"
+      ? fixtureItemPage(
+          [{ id: "turn", status: "completed", items: [original] }],
+          params,
+        )
+      : method === "thread/turns/list"
+        ? {
+            data: [{ id: "turn", status: "completed", items: [original] }],
+            nextCursor: null,
+          }
+        : rpc(method, params);
   let offset: number | null = 0;
   let text = "";
   while (offset !== null) {

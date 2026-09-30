@@ -52,6 +52,7 @@ import {
   itemText,
   type ItemReference,
 } from "./history";
+import { readRuntimeHistory, readRuntimeDetail } from "./runtime-history";
 import { defaultThreadName } from "../shared/thread-label";
 import { version } from "../../package.json";
 import { elicitationContent } from "../shared/elicitation";
@@ -102,10 +103,6 @@ export class HostService extends EventEmitter {
   private mutations = new Map<string, Promise<any>>();
   private newThreads = new Map<string, number>();
   private historyReads = new Map<string, Promise<any>>();
-  private recentHistory = new Map<
-    string,
-    { turns: Turn[]; at: number; bytes: number }
-  >();
   features: HostFeatures;
   private connecting = false;
   vault: Vault;
@@ -915,34 +912,24 @@ export class HostService extends EventEmitter {
     const key = JSON.stringify([id, cursor]);
     const current = this.historyReads.get(key);
     if (current) return current;
-    const request = this.codex.rpc("thread/turns/list", {
-      threadId: id,
-      limit: 15,
-      itemsView: "full",
-      sortDirection: "desc",
-      cursor,
-    });
+    const request = this.codex.persistent
+      ? this.codex.runtimeInfo.historyPaging
+        ? this.codex.rpc("runtime/history/page", { threadId: id, cursor })
+        : Promise.reject(
+            new Error(
+              "History paging needs the updated execution worker. It will migrate when active work finishes.",
+            ),
+          )
+      : readRuntimeHistory(
+          (method, params) => this.codex.rpc(method, params),
+          id,
+          cursor,
+        );
     this.historyReads.set(key, request);
     try {
       const page = await request;
       if (!Array.isArray(page.data))
         throw new Error("Runtime returned invalid conversation history.");
-      const bytes = Buffer.byteLength(JSON.stringify(page.data));
-      this.recentHistory.delete(key);
-      // Detail cache is bounded and only a convenience; persisted history owns data.
-      while (
-        this.recentHistory.size &&
-        [...this.recentHistory.values()].reduce((n, v) => n + v.bytes, 0) +
-          bytes >
-          64_000_000
-      )
-        this.recentHistory.delete(this.recentHistory.keys().next().value!);
-      if (bytes <= 64_000_000)
-        this.recentHistory.set(key, {
-          turns: page.data,
-          at: Date.now(),
-          bytes,
-        });
       return page;
     } finally {
       this.historyReads.delete(key);
@@ -993,7 +980,7 @@ export class HostService extends EventEmitter {
     if (method === "thread.recovery") {
       const { thread } = await this.codex.rpc("thread/read", {
         threadId: p.id,
-        includeTurns: true,
+        includeTurns: false,
       });
       return {
         id: thread.id,
@@ -1122,25 +1109,15 @@ export class HostService extends EventEmitter {
           )
         )
           throw e;
-        // Older runtimes expose legacy history through thread/read instead.
-        try {
-          const stored = await this.codex.rpc("thread/read", {
-            threadId: p.id,
-            includeTurns: true,
-          });
-          thread = stored.thread;
-          history = stored.thread.turns || [];
-        } catch (error: any) {
-          // A new rollout can exist before its first metadata write. Keep the
-          // accepted turn visible until storage catches up; other errors surface.
-          if (
-            !thread ||
-            !this.loaded.has(p.id) ||
-            !/rollout.*is empty|not yet materialized/i.test(error.message)
-          )
-            throw error;
-          historyPending = true;
-        }
+        // Newly accepted turns may precede persisted rollout metadata. Unsupported
+        // item paging must never fall back to downloading whole turns.
+        if (
+          !thread ||
+          !this.loaded.has(p.id) ||
+          !/rollout.*is empty|not yet materialized/i.test(e.message)
+        )
+          throw e;
+        historyPending = true;
       }
       const turns = new Map(
         history.map((t) => [t.id, { ...t, items: visibleItems(t.items) }]),
@@ -1152,9 +1129,46 @@ export class HostService extends EventEmitter {
         let lastShared = -1;
         for (const [index, turn] of live.entries())
           if (turns.has(turn.id)) lastShared = index;
-        for (const [index, turn] of live.entries())
-          if (turns.has(turn.id) || index > lastShared)
+        for (const [index, turn] of live.entries()) {
+          const saved = turns.get(turn.id);
+          if (saved) {
+            // A saved page can begin halfway through a long turn. Refresh only
+            // its existing items and the newer live tail, never its older prefix.
+            const liveItems = new Map(
+              turn.items.map((item) => [item.id, item]),
+            );
+            const savedIds = new Set(saved.items.map((item) => item.id));
+            let lastItem = -1;
+            for (const [i, item] of turn.items.entries())
+              if (savedIds.has(item.id)) lastItem = i;
+            turns.set(turn.id, {
+              ...saved,
+              status: turn.status,
+              items: [
+                ...saved.items.map((item) =>
+                  liveItems.has(item.id)
+                    ? {
+                        ...liveItems.get(item.id)!,
+                        ...(item.detail ? { detail: item.detail } : {}),
+                      }
+                    : item,
+                ),
+                ...(index === live.length - 1 && lastItem >= 0
+                  ? turn.items
+                      .slice(lastItem + 1)
+                      .filter((item) => !savedIds.has(item.id))
+                  : []),
+              ],
+            });
+          } else if (
+            index > lastShared &&
+            (lastShared >= 0 ||
+              historyPending ||
+              !history.length ||
+              this.activeTurns.get(p.id) === turn.id)
+          )
             turns.set(turn.id, turn);
+        }
       }
       const listed = this.threads.find((t) => t.id === p.id);
       const projected = displayHistory(
@@ -1211,20 +1225,20 @@ export class HostService extends EventEmitter {
         ?.find((t) => t.id === ref.turnId)
         ?.items.find((i) => i.id === ref.itemId);
       if (!item) {
-        const key = JSON.stringify([ref.threadId, ref.cursor || null]);
-        const cached = this.recentHistory.get(key);
-        const turns =
-          cached && Date.now() - cached.at < 60_000
-            ? cached.turns
-            : (await this.historyPage(ref.threadId, ref.cursor || null)).data;
-        item = turns
-          .find((t: Turn) => t.id === ref.turnId)
-          ?.items.find((i: ChatItem) => i.id === ref.itemId);
+        return this.codex.persistent
+          ? this.codex.runtimeInfo.historyPaging
+            ? this.codex.rpc("runtime/history/item", { ref, offset })
+            : Promise.reject(
+                new Error(
+                  "Detail reads need the updated execution worker. Reopen after migration.",
+                ),
+              )
+          : readRuntimeDetail(
+              (method, params) => this.codex.rpc(method, params),
+              ref,
+              offset,
+            );
       }
-      if (!item)
-        throw new Error(
-          "This detail is no longer in the saved page. Refresh the conversation.",
-        );
       const text = itemText(item);
       const end = Math.min(text.length, offset + 32_000);
       return {
@@ -1309,8 +1323,6 @@ export class HostService extends EventEmitter {
       this.newThreads.delete(id);
       this.agents.delete(id);
       this.usage.delete(id);
-      for (const key of this.recentHistory.keys())
-        if (JSON.parse(key)[0] === id) this.recentHistory.delete(key);
       if (method === "thread.delete") {
         this.owned.delete(id);
         await this.saveOwned();

@@ -1,7 +1,7 @@
 import type { ChatItem, Turn } from "../shared/types";
 
 // Bound display data before encryption. Original items remain in runtime storage.
-export const HISTORY_BYTES = 1_000_000;
+export const HISTORY_BYTES = 256 * 1024;
 const MESSAGE_CHARS = 24_000;
 const PREVIEW_CHARS = 600;
 export type ItemReference = {
@@ -32,6 +32,7 @@ export function historyPosition(cursor?: string): Position {
   }
 }
 export function displayItem(item: ChatItem, ref: ItemReference): ChatItem {
+  ref = item.detail || ref;
   if (["userMessage", "agentMessage", "plan"].includes(item.type)) {
     const text =
       item.type === "userMessage"
@@ -112,7 +113,7 @@ export function displayHistory(
       cursor: position.cursor,
     });
     const size = Buffer.byteLength(JSON.stringify(item)) + 128;
-    if (selected.length && bytes + size > HISTORY_BYTES) break;
+    if (selected.length && bytes + size > HISTORY_BYTES - 16_384) break;
     bytes += size;
     selected.unshift({ turn: row.turn, item });
     start--;

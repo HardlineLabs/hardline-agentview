@@ -105,6 +105,14 @@ ID on older runtimes). This does not claim that the model has understood the
 direction. Failed steering retains the draft; uncertain delivery stays visibly
 unconfirmed and is never resent automatically.
 
+History display pages are capped at 256 KiB in the execution worker using
+item-level runtime cursors; turn metadata is loaded without contents. The worker
+projects original items before the named-pipe transfer and slices on-demand detail
+into 32,000-character chunks. Local app-server reads have one original item as their
+granularity; no whole-turn/full-history requests are used for reopening. Byte
+pages can split a long turn. Saved partial turns retain only the matching live
+items and newer tail, never their older cached prefix.
+
 Reopened conversations preserve the saved page's chronological order. The Host's
 live cache can contain turns older than that page; these stay behind Earlier
 messages instead of being appended as new work. Shared turns receive live updates,
