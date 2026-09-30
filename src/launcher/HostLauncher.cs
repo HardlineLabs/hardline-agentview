@@ -14,6 +14,8 @@ internal static class HostLauncher
     {
         [DataMember(Name = "executable")]
         public string Executable;
+        [DataMember(Name = "dataDirectory")]
+        public string DataDirectory;
     }
 
     [STAThread]
@@ -34,12 +36,16 @@ internal static class HostLauncher
                 String.Equals(target, Path.GetFullPath(Application.ExecutablePath), StringComparison.OrdinalIgnoreCase) ||
                 !File.Exists(target))
                 throw new InvalidDataException("The installed Host executable could not be found.");
-            Process.Start(new ProcessStartInfo(target)
+            var start = new ProcessStartInfo(target)
             {
                 Arguments = Array.IndexOf(args, "--hidden") >= 0 ? "--role=host --hidden" : "--role=host",
                 WorkingDirectory = Path.GetDirectoryName(target),
                 UseShellExecute = false
-            });
+            };
+            start.EnvironmentVariables.Remove("ELECTRON_RUN_AS_NODE");
+            if (!String.IsNullOrWhiteSpace(installation.DataDirectory))
+                start.EnvironmentVariables["AGENTVIEW_DATA_DIR"] = Path.GetFullPath(installation.DataDirectory);
+            Process.Start(start);
         }
         catch (Exception error)
         {

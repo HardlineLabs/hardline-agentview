@@ -6,6 +6,7 @@ $installRoot = [IO.Path]::GetFullPath($InstallDirectory)
 $statePath = Join-Path $installRoot 'current.json'
 if (Test-Path -LiteralPath (Join-Path $installRoot 'updating.lock')) { exit 0 }
 $state = Get-Content -Raw -LiteralPath $statePath | ConvertFrom-Json
+if ($state.dataDirectory) { $env:AGENTVIEW_DATA_DIR = [IO.Path]::GetFullPath($state.dataDirectory) }
 $hostExecutable = [IO.Path]::GetFullPath((Join-Path $installRoot $state.executable))
 if (-not $hostExecutable.StartsWith($installRoot.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase) -or -not (Test-Path -LiteralPath $hostExecutable)) { throw 'Installed host path is invalid.' }
 # The interactive user session is required for browser and native computer use.

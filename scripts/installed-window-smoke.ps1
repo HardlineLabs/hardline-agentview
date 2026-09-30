@@ -4,7 +4,7 @@ $ErrorActionPreference = 'Stop'
 Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
 $installRoot = (Resolve-Path -LiteralPath $InstallDirectory).Path
 $state = Get-Content -Raw -LiteralPath (Join-Path $installRoot 'current.json') | ConvertFrom-Json
-$dataRoot = if ($env:AGENTVIEW_DATA_DIR) { $env:AGENTVIEW_DATA_DIR } else { Join-Path $env:APPDATA 'Hardline AgentView Host' }
+$dataRoot = if ($state.dataDirectory) { $state.dataDirectory } elseif ($env:AGENTVIEW_DATA_DIR) { $env:AGENTVIEW_DATA_DIR } else { Join-Path $env:APPDATA 'Hardline AgentView Host' }
 $health = Get-Content -Raw -LiteralPath (Join-Path $dataRoot 'health.json') | ConvertFrom-Json
 $expected = [IO.Path]::GetFullPath((Join-Path $installRoot $state.executable))
 $running = Get-Process -Id $health.pid

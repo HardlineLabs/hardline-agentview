@@ -135,6 +135,23 @@ worker during Host replacement.
 
 ## Managed installation and updates
 
+Managed installations can pin `dataDirectory` in `current.json`. Both the native
+launcher and scheduled `start-host.ps1` pass it as `AGENTVIEW_DATA_DIR`, overriding
+inherited settings. The installer preserves this selection across updates; use
+`-HostDataDirectory` to select an already prepared profile. The shortcut opens the
+native launcher so it uses the same profile as scheduled startup.
+
+When installing from a packaged desktop app, Windows can redirect AppData into
+that app's LocalCache while scheduled startup sees the physical AppData folder.
+An absolute AppData path alone does not prevent this. For this case, back up both
+profiles and migrate the intended identity, devices and durable state to a private
+directory outside AppData, such as `<InstallDirectory>/data`. Repoint the tunnel's
+certificate/credential paths and saved connector path to that directory. Do not
+merge unrelated Host identities or regenerate paired-device credentials. Set
+`-HostDataDirectory` to the migrated directory and pass the same directory to
+`configure-remote.ps1 -HostDataDir` for future remote configuration. The installer
+does not guess which profile owns the user's devices or automatically migrate it.
+
 Build with `npm ci` and `npm run package`, then install the validated unpacked host:
 
 ```powershell

@@ -3,10 +3,12 @@ param(
     [Parameter(Mandatory)][string]$PackageDirectory,
     [Parameter(Mandatory)][string]$InstallDirectory,
     [Parameter(Mandatory)][ValidatePattern('^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?$')][string]$Version,
+    [string]$HostDataDirectory,
     [switch]$RegisterStartup,
     [switch]$Elevated
 )
 $ErrorActionPreference = 'Stop'
+$originalDataDirectory = $env:AGENTVIEW_DATA_DIR
 # Agent-driven installs can inherit the execution worker's Node-only Electron mode.
 # The managed Host must start as an Electron application.
 Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
@@ -54,7 +56,11 @@ function Stop-InstalledHost {
     } while ($added)
     foreach ($processId in $ids) { Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue }
 }
-$dataRoot = if ($env:AGENTVIEW_DATA_DIR) { $env:AGENTVIEW_DATA_DIR } else { Join-Path $env:APPDATA 'Hardline AgentView Host' }
+$previousDataDirectory = if ($previous) { ($previous | ConvertFrom-Json).dataDirectory } else { $null }
+# Pin the profile so scheduled and interactive launches cannot select different AppData copies.
+$dataRoot = if ($HostDataDirectory) { $HostDataDirectory } elseif ($previousDataDirectory) { $previousDataDirectory } elseif ($env:AGENTVIEW_DATA_DIR) { $env:AGENTVIEW_DATA_DIR } else { Join-Path $env:APPDATA 'Hardline AgentView Host' }
+$dataRoot = [IO.Path]::GetFullPath($dataRoot)
+$env:AGENTVIEW_DATA_DIR = $dataRoot
 $healthPath = Join-Path $dataRoot 'health.json'
 $settingsPath = Join-Path $dataRoot 'settings.json'
 $previousSettings = if (Test-Path -LiteralPath $settingsPath) { Get-Content -Raw -LiteralPath $settingsPath } else { $null }
@@ -70,7 +76,7 @@ try {
         [IO.File]::WriteAllText($settingsPath, ($managedSettings | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
     }
     $relativeExe = "versions\$Version\AgentView Host.exe"
-    @{ version = $Version; executable = $relativeExe; installedAt = [DateTime]::UtcNow.ToString('o') } | ConvertTo-Json | Set-Content -LiteralPath ($pointerPath + '.next') -Encoding UTF8
+    @{ version = $Version; executable = $relativeExe; dataDirectory = $dataRoot; installedAt = [DateTime]::UtcNow.ToString('o') } | ConvertTo-Json | Set-Content -LiteralPath ($pointerPath + '.next') -Encoding UTF8
     Move-Item -LiteralPath ($pointerPath + '.next') -Destination $pointerPath -Force
     $startedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
     # Host owns hidden startup. Windows SW_HIDE can suppress the first explicit window open.
@@ -94,6 +100,7 @@ try {
         $previous | Set-Content -LiteralPath $pointerPath -Encoding UTF8
         $oldExe = [IO.Path]::GetFullPath((Join-Path $installRoot ($previous | ConvertFrom-Json).executable))
         Assert-InstalledPath $oldExe
+        $env:AGENTVIEW_DATA_DIR = if ($previousDataDirectory) { $previousDataDirectory } else { $originalDataDirectory }
         Start-Process -FilePath $oldExe -ArgumentList @('--role=host', '--hidden') -WindowStyle Normal
     } else { Remove-Item -LiteralPath $pointerPath -Force -ErrorAction SilentlyContinue }
     throw "$failure Previous host restored when available."
@@ -120,7 +127,7 @@ if ($RegisterStartup) {
 }
 # Keep the visible entry point on the same validated version as managed startup.
 $shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $installRoot 'AgentView Host.lnk'))
-$shortcut.TargetPath = Join-Path $installRoot $relativeExe
+$shortcut.TargetPath = Join-Path $installRoot 'AgentView Host.exe'
 $shortcut.Arguments = '--role=host'
 $shortcut.WorkingDirectory = $installRoot
 $shortcut.Description = 'Open the current AgentView Host'
