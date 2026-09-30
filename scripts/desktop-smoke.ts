@@ -135,6 +135,10 @@ try {
   await page.mouse.down();
   await page.mouse.move(resizerBox!.x - 96, resizerBox!.y + resizerBox!.height / 2);
   await page.mouse.up();
+  await page.waitForFunction((before) => {
+    const panel = document.querySelector(".chat-panel");
+    return !!panel && panel.getBoundingClientRect().width >= before + 80;
+  }, chatBeforeResize);
   const chatAfterResize = await page
     .locator(".chat-panel")
     .evaluate((element) => element.getBoundingClientRect().width);
