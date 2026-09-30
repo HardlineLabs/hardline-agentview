@@ -73,3 +73,78 @@ test("live vault reconciles additions and deletions and never reads arbitrary pa
     await fs.rm(root, { recursive: true, force: true });
   }
 });
+
+test("workspace products use their entry titles and refresh from the manifest", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "agentview-projects-"));
+  const vault = new Vault(root);
+  try {
+    await fs.mkdir(path.join(root, "Projects/Relay/App"), { recursive: true });
+    await fs.writeFile(
+      path.join(root, "Projects/Relay/App/index.md"),
+      "---\ntype: entry\ndomain: relay\nstatus: current\n---\n# Hardline Relay App\n",
+    );
+    await fs.writeFile(
+      path.join(root, "workspace.json"),
+      JSON.stringify({
+        products: {
+          "relay-app": {
+            path: "../products/relay-app",
+            onboarding: "Projects/Relay/App/index.md",
+          },
+        },
+      }),
+    );
+    await vault.start();
+    assert.deepEqual(
+      vault.projects.map(({ id, name }) => ({ id, name })),
+      [
+        { id: "vault", name: "Company brain" },
+        { id: "relay-app", name: "Hardline Relay App" },
+      ],
+    );
+    const refreshed = new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(
+        () => reject(new Error("Projects did not refresh")),
+        5000,
+      );
+      const check = () => {
+        if (vault.projects.some((project) => project.id === "new-product")) {
+          clearTimeout(timer);
+          vault.off("graph", check);
+          resolve();
+        }
+      };
+      vault.on("graph", check);
+    });
+    await fs.mkdir(path.join(root, "Projects/New Product"), {
+      recursive: true,
+    });
+    await fs.writeFile(
+      path.join(root, "Projects/New Product/index.md"),
+      "---\ntype: entry\ndomain: product\nstatus: current\n---\n# New Product\n",
+    );
+    await fs.writeFile(
+      path.join(root, "workspace.json"),
+      JSON.stringify({
+        products: {
+          "relay-app": {
+            path: "../products/relay-app",
+            onboarding: "Projects/Relay/App/index.md",
+          },
+          "new-product": {
+            path: "../products/new-product",
+            onboarding: "Projects/New Product/index.md",
+          },
+        },
+      }),
+    );
+    await refreshed;
+    assert.equal(
+      vault.projects.find((project) => project.id === "new-product")?.name,
+      "New Product",
+    );
+  } finally {
+    await vault.close();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});

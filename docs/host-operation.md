@@ -133,6 +133,14 @@ that session and retry. AgentView does not terminate another runtime or edit its
 database to bypass ownership. These changes preserve the existing execution
 worker during Host replacement.
 
+Host 0.4.4-dev.5 treats the selected vault's `workspace.json.products` as the
+canonical onboarding workspaces. Product names come from their entry-note titles,
+and runtime project metadata is matched by checkout path without replacing the
+manifest identity. A newly registered product therefore appears in both clients
+without requiring an earlier Codex conversation. Runtime-only folders remain
+available after the manifest workspaces; `plannedProducts` are not execution
+workspaces.
+
 ## Managed installation and updates
 
 Managed installations can pin `dataDirectory` in `current.json`. Both the native

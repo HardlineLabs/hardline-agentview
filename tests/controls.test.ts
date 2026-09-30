@@ -9,6 +9,7 @@ import {
   threadSources,
   assignProjects,
   desktopAssignments,
+  mergeProjects,
 } from "../src/host/catalog";
 import { observeUsage, SessionObserver } from "../src/host/observer";
 import { moveToward } from "../src/ui/motion";
@@ -84,6 +85,45 @@ test("legacy project adapter reads only local assignments and translates migrate
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
+});
+
+test("manifest projects keep stable identities while runtime metadata follows their paths", () => {
+  const root = path.join(process.cwd(), "project");
+  const projects = mergeProjects(
+    [
+      { id: "vault", name: "Company brain", path: process.cwd() },
+      { id: "new-product", name: "New Product", path: root },
+    ],
+    [
+      { id: "runtime-new", name: "project", path: root, runtime: true },
+      {
+        id: "runtime-other",
+        name: "Outside workspace",
+        path: path.join(process.cwd(), "outside"),
+        runtime: true,
+      },
+    ],
+  );
+  assert.deepEqual(
+    projects.map(({ id, name, runtimeId }) => ({ id, name, runtimeId })),
+    [
+      { id: "vault", name: "Company brain", runtimeId: undefined },
+      { id: "new-product", name: "New Product", runtimeId: "runtime-new" },
+      {
+        id: "runtime-other",
+        name: "Outside workspace",
+        runtimeId: "runtime-other",
+      },
+    ],
+  );
+  assert.equal(
+    assignProjects(
+      [{ ...thread("new"), cwd: root, projectId: "runtime-new" }],
+      projects,
+      {},
+    )[0].projectId,
+    "new-product",
+  );
 });
 
 test("steering targets the current owned turn; archive, restore and delete stay in the runtime", async () => {
