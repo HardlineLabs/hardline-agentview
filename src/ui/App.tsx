@@ -795,10 +795,13 @@ function ClientApp() {
     recentPages.current.set(page.thread.id, page);
   }, [page]);
   const readGeneration = useRef(0);
+  const historyRequest = useRef(false);
   const failedHistory = useRef(new Set<string>());
   const noteGeneration = useRef(0);
   const notify = (message: string) => setToast(message);
   const readThread = async (id: string, more = false, refresh = false) => {
+    if (more && (historyRequest.current || !page?.nextCursor)) return;
+    historyRequest.current = true;
     if (!refresh) failedHistory.current.delete(id);
     const generation = ++readGeneration.current;
     if (!more) {
@@ -807,8 +810,8 @@ function ClientApp() {
       setPage((old) =>
         old?.thread.id === id ? old : recentPages.current.get(id),
       );
-      setLoading(true);
     }
+    setLoading(true);
     if (!refresh) {
       setChatOpen(true);
       setPhoneView("chat");
@@ -836,7 +839,10 @@ function ClientApp() {
       )
         notify(e.message);
     } finally {
-      if (generation === readGeneration.current) setLoading(false);
+      if (generation === readGeneration.current) {
+        historyRequest.current = false;
+        setLoading(false);
+      }
     }
   };
   useEffect(() => {

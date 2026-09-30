@@ -9,6 +9,8 @@ function fixture() {
     process.cwd(),
   );
   host.codex.ready = true;
+  host.codex.persistent = true;
+  host.codex.runtimeInfo.historyPaging = true;
   const state = host as any;
   const thread = {
     id: "owned",
@@ -149,7 +151,7 @@ test("empty rollout preserves a live accepted turn and choices until persisted h
     );
   };
   const pending = await host.handle("thread.read", { id: thread.id });
-  assert.equal(reads, 2);
+  assert.equal(reads, 1);
   assert.equal(pending.historyPending, true);
   assert.deepEqual(pending.turns, [turn]);
   assert.equal(pending.thread.reasoningEffort, "low");
@@ -209,9 +211,7 @@ test("reopening paginated history never appends cached onboarding after newer tu
   state.liveTurns.set(thread.id, history);
   host.codex.rpc = async (method, params) => {
     if (method === "thread/read") return { thread };
-    assert.equal(method, "thread/turns/list");
-    assert.equal(params.sortDirection, "desc");
-    assert.equal(params.limit, 15);
+    assert.equal(method, "runtime/history/page");
     return {
       data: (params.cursor ? history.slice(0, 5) : history.slice(5)).reverse(),
       nextCursor: params.cursor ? null : "older",
@@ -261,17 +261,18 @@ test("history overlap keeps fresh cached updates and only appends newer unpersis
   assert.deepEqual(persisted.turns, saved.slice(-15));
 });
 
-test("legacy full history keeps its original order when live turns overlap", async () => {
+test("unsupported paging never falls back to downloading legacy full history", async () => {
   const { host, state, thread, turn } = fixture();
   const older = { id: "onboarding", status: "completed", items: [] };
   state.liveTurns.set(thread.id, [older, turn]);
   host.codex.rpc = async (method) => {
-    if (method === "thread/turns/list") throw new Error("Method not found");
+    if (method === "runtime/history/page") throw new Error("Method not found");
     return { thread: { ...thread, turns: [older, turn] } };
   };
-  const result = await host.handle("thread.read", { id: thread.id });
-  assert.deepEqual(result.turns, [older, turn]);
-  assert.equal(result.nextCursor, null);
+  await assert.rejects(
+    host.handle("thread.read", { id: thread.id }),
+    /Method not found/,
+  );
 });
 
 test("steering retains the client message identity so the pending bubble reconciles with runtime input", async () => {

@@ -268,6 +268,12 @@ Chromium additionally exercises camera-frame QR decoding,
 offline shell and update/draft recovery. These do not establish physical iPhone
 camera, keyboard, installation or cellular behavior; verify those on an iPhone.
 
+Opening history loads the newest byte-bounded page. An upward touch or wheel
+gesture near the top requests the preceding page; **Earlier messages** remains
+available as a manual control. Only one history request runs at a time, and loading
+older rows preserves the reading position. Host 0.4.4-dev.6 bounds these pages in
+the execution worker before transport.
+
 The long-conversation regression uses 1,200 items in one turn and checks mounted
 message counts, input-to-frame timing against an empty chat, expanded tools, history pagination and
 scrolling during streamed output in both browsers. Run it alone with

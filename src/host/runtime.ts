@@ -4,6 +4,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { Codex } from "./codex";
 import { administrator } from "./permissions";
+import { readRuntimeHistory, readRuntimeDetail } from "./runtime-history";
 import { version } from "../../package.json";
 
 async function main() {
@@ -106,6 +107,7 @@ async function main() {
               error: codex.error,
               elevated,
               workerVersion: version,
+              historyPaging: true,
               pid: process.pid,
             },
           });
@@ -129,7 +131,29 @@ async function main() {
             elevated,
             workerVersion: version,
           };
-        else if (message.method === "runtime/shutdown") {
+        else if (
+          ["runtime/history/page", "runtime/history/item"].includes(
+            message.method,
+          )
+        ) {
+          inFlight++;
+          try {
+            result =
+              message.method === "runtime/history/page"
+                ? await readRuntimeHistory(
+                    (method, params) => codex.rpc(method, params),
+                    message.params.threadId,
+                    message.params.cursor || null,
+                  )
+                : await readRuntimeDetail(
+                    (method, params) => codex.rpc(method, params),
+                    message.params.ref,
+                    message.params.offset,
+                  );
+          } finally {
+            inFlight--;
+          }
+        } else if (message.method === "runtime/shutdown") {
           if (turns.size || approvals.size || inFlight)
             throw new Error(
               "Finish or stop active work before restarting the execution runtime.",

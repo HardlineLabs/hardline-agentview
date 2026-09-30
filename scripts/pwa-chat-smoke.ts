@@ -1,3 +1,4 @@
+import { fixtureItemPage } from "./history-fixture";
 import assert from "node:assert/strict";
 import path from "node:path";
 import type { Page } from "playwright";
@@ -29,6 +30,8 @@ export async function historyOrderSmoke(page: Page, host: HostService) {
     ],
   }));
   host.codex.rpc = async (method, params) => {
+    if (method === "thread/items/list" && params.threadId === thread.id)
+      return fixtureItemPage(turns, params);
     if (method === "thread/turns/list" && params.threadId === thread.id) {
       const end = params.cursor ? Number(params.cursor) : turns.length;
       const start = Math.max(0, end - params.limit);
@@ -76,8 +79,7 @@ export async function historyOrderSmoke(page: Page, host: HostService) {
     }
     await host.refreshThreads();
     await open("History order");
-    await checkOrder(5);
-    await page.getByRole("button", { name: "Earlier messages" }).click();
+    await checkOrder(0);
     await page.getByText("Onboard this workspace", { exact: true }).waitFor();
     await checkOrder(0);
     await open("First conversation");
@@ -85,14 +87,14 @@ export async function historyOrderSmoke(page: Page, host: HostService) {
       .getByText("Welcome to First. Your workspace stays on this computer.")
       .waitFor();
     await open("History order");
-    await checkOrder(5);
+    await checkOrder(0);
     await page.reload();
-    await checkOrder(5);
+    await checkOrder(0);
     await page.context().setOffline(true);
     await page.locator(".connection-pill.lost").waitFor();
     await page.context().setOffline(false);
     await page.locator(".connection-pill:not(.lost)").waitFor();
-    await checkOrder(5);
+    await checkOrder(0);
   } finally {
     await page.context().setOffline(false);
     host.codex.rpc = rpc;
@@ -178,6 +180,8 @@ export async function chatRecoverySmoke(
         },
       };
     }
+    if (method === "thread/items/list" && params.threadId === thread?.id)
+      return fixtureItemPage([turn], params);
     if (method === "thread/turns/list" && params.threadId === thread?.id)
       return { data: [turn], nextCursor: null };
     if (method === "turn/steer") {

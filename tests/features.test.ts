@@ -1,3 +1,4 @@
+import { fixtureItemPage } from "../scripts/history-fixture";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
@@ -170,7 +171,23 @@ test("permissions, rename, bulk results, legacy persistence and image input reac
         },
       };
     if (method === "thread/turns/list")
-      throw new Error("Unsupported pagination");
+      return {
+        data: [{ id: "old", status: "completed", items: [] }],
+        nextCursor: null,
+      };
+    if (method === "thread/items/list")
+      return fixtureItemPage(
+        [
+          {
+            id: "old",
+            status: "completed",
+            items: [
+              { id: "answer", type: "agentMessage", text: "Saved response" },
+            ],
+          },
+        ],
+        p,
+      );
     if (method === "turn/start")
       return { turn: { id: "new", status: "inProgress", items: [] } };
     return { data: [] };

@@ -30,6 +30,15 @@ async function launch() {
       : { args: [".", "--role=client"] }),
     env,
   });
+  await app.evaluate(({ BrowserWindow, screen }) => {
+    const area = screen.getPrimaryDisplay().workArea;
+    BrowserWindow.getAllWindows()[0].setBounds({
+      x: area.x,
+      y: area.y,
+      width: Math.min(1500, area.width),
+      height: Math.min(940, area.height),
+    });
+  });
   await app.context().addInitScript("globalThis.__name = (value) => value");
   page = await app.firstWindow();
   await page.evaluate("globalThis.__name = (value) => value");
@@ -133,12 +142,16 @@ try {
     resizerBox!.y + resizerBox!.height / 2,
   );
   await page.mouse.down();
-  await page.mouse.move(resizerBox!.x - 96, resizerBox!.y + resizerBox!.height / 2);
+  await page.mouse.move(resizerBox!.x + 96, resizerBox!.y + resizerBox!.height / 2, { steps: 8 });
   await page.mouse.up();
+  await page.waitForFunction((before) => {
+    const panel = document.querySelector(".chat-panel");
+    return !!panel && panel.getBoundingClientRect().width <= before - 80;
+  }, chatBeforeResize);
   const chatAfterResize = await page
     .locator(".chat-panel")
     .evaluate((element) => element.getBoundingClientRect().width);
-  assert.ok(chatAfterResize >= chatBeforeResize + 80);
+  assert.ok(chatAfterResize <= chatBeforeResize - 80);
   await longConversationSmoke(page, host);
   await page.getByRole("button", { name: "Workspace settings" }).click();
   await page.getByRole("button", { name: "Files", exact: true }).click();

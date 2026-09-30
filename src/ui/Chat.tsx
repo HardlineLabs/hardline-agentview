@@ -449,6 +449,21 @@ export function Chat(props: Props) {
   const [projectId, setProjectId] = useState("vault");
   const scroll = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
+  const earlierGesture = useRef(false);
+  const touchY = useRef<number | null>(null);
+  const loadEarlier = () => {
+    if (
+      browser &&
+      earlierGesture.current &&
+      !props.loading &&
+      props.page?.nextCursor &&
+      scroll.current &&
+      scroll.current.scrollTop < 120
+    ) {
+      earlierGesture.current = false;
+      props.onLoadMore();
+    }
+  };
   const input = useRef<HTMLTextAreaElement>(null);
   const active = Boolean(
     props.thread?.owned && props.thread?.status.type === "active",
@@ -491,6 +506,8 @@ export function Chat(props: Props) {
     setConfirmClear(undefined);
     setSentNotice("");
     follow.current = true;
+    earlierGesture.current = false;
+    touchY.current = null;
   }, [props.thread?.id]);
   const chooseEffort = (value: string) => {
     choices.current.set(props.thread?.id || "new", { model, effort: value });
@@ -944,10 +961,28 @@ export function Chat(props: Props) {
       <div
         className="chat-scroll"
         ref={scroll}
+        onWheelCapture={(event) => {
+          earlierGesture.current = event.deltaY < 0;
+          loadEarlier();
+        }}
+        onTouchStartCapture={(event) => {
+          touchY.current = event.touches[0]?.clientY ?? null;
+        }}
+        onTouchMoveCapture={(event) => {
+          const y = event.touches[0]?.clientY;
+          earlierGesture.current =
+            y !== undefined && touchY.current !== null && y > touchY.current;
+          touchY.current = y ?? null;
+          loadEarlier();
+        }}
+        onTouchEndCapture={() => {
+          touchY.current = null;
+        }}
         onScrollCapture={() => {
           // Record bottom-follow intent before virtual rows measure new heights.
           const e = scroll.current!;
           follow.current = e.scrollHeight - e.scrollTop - e.clientHeight < 90;
+          loadEarlier();
         }}
       >
         {Boolean(props.approvalActivity?.length) && (
@@ -1032,7 +1067,11 @@ export function Chat(props: Props) {
         ) : (
           <>
             {props.page?.nextCursor && (
-              <button className="load-more" onClick={props.onLoadMore}>
+              <button
+                className="load-more"
+                disabled={props.loading}
+                onClick={props.onLoadMore}
+              >
                 <ArrowLeft size={12} /> Earlier messages
               </button>
             )}
